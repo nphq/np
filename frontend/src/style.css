@@ -1,0 +1,69 @@
+@import 'tailwindcss';
+
+/*
+ * Tokyo Night 主题（默认）。
+ * 直接覆盖 Tailwind 的 zinc/sky/amber/emerald/red 色阶，全应用零改动换肤。
+ * 语义映射：
+ *   zinc-950  = 应用背景（bg_dark）   zinc-900 = 面板（bg）        zinc-800 = 边框/悬浮（bg_highlight）
+ *   zinc-700  = 强边框               zinc-600/500 = 弱文字/注释   zinc-400/300/200/100 = 文字阶梯
+ *   sky       = blue/cyan（CPU/蓝）  amber = yellow/orange（内存/黄）
+ *   emerald   = green（健康/绿）      red = red（危险/红）
+ */
+@theme {
+  --color-zinc-950: #16161e;
+  --color-zinc-900: #1a1b26;
+  --color-zinc-800: #292e42;
+  --color-zinc-700: #3b4261;
+  --color-zinc-600: #565f89;
+  --color-zinc-500: #565f89;
+  --color-zinc-400: #a9b1d6;
+  --color-zinc-300: #c0caf5;
+  --color-zinc-200: #d0d5f0;
+  --color-zinc-100: #e6e9ff;
+  --color-zinc-50: #f5f7ff;
+
+  --color-sky-500: #7aa2f7;
+  --color-sky-400: #7dcfff;
+  --color-sky-300: #7dcfff;
+
+  --color-amber-500: #e0af68;
+  --color-amber-400: #e0af68;
+  --color-amber-300: #ff9e64;
+
+  --color-emerald-500: #9ece6a;
+  --color-emerald-400: #9ece6a;
+  --color-emerald-300: #9ece6a;
+
+  --color-red-600: #f7768e;
+  --color-red-500: #f7768e;
+  --color-red-400: #f7768e;
+  --color-red-300: #f7768e;
+  --color-red-800: #b55368;
+  --color-red-950: #2a1620;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family:
+    'SF Pro Text',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Noto Sans CJK SC',
+    sans-serif;
+}
+
+#app {
+  height: 100vh;
+}

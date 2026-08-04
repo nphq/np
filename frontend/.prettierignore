@@ -1,0 +1,6 @@
+dist
+build
+node_modules
+bun.lock
+wailsjs
+.vite

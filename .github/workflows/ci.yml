@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test (Go + Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      # Wails v3 默认 GTK4 + WebKitGTK 6.0；uiapi/main 依赖
+      # github.com/wailsapp/wails/v3/pkg/application，无 CGO 头文件时
+      # go vet/test 会在 Linux 上报 undefined: pointer。
+      - name: Install Linux Wails deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libwayland-dev
+
+      # 必须先 build frontend：main.go 用 //go:embed all:frontend/dist，
+      # dist 被 .gitignore 忽略，go vet/test/lint 之前需要先生成
+      - name: Frontend install + lint + typecheck + build
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run lint
+          bun run format:check
+          bun run check
+          bun run build
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          # v2 配置（.golangci.yml 顶层 version: "2"）；需 action v7+
+          version: v2.11.4
+
+      - name: Go test
+        run: go test ./...
+
+  e2e:
+    name: E2E (Docker Nomad)
+    runs-on: ubuntu-latest
+    # 用 docker 跑 hashicorp/nomad server-only，对 internal/cluster + uiapi 真连
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      # e2e → uiapi → wails/v3/pkg/application，同样需要 Linux CGO 头文件
+      - name: Install Linux Wails deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libwayland-dev
+
+      - name: Pull Nomad image (warm cache)
+        run: docker pull hashicorp/nomad:2.0.4
+
+      - name: go vet e2e
+        run: go vet -tags=e2e ./internal/e2e/...
+
+      - name: go test e2e
+        run: go test -tags=e2e -v -timeout 5m ./internal/e2e/...
+
+  build-matrix:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    # 目前仅配置 darwin 打包（build/darwin/Taskfile.yml 支持 ARCH 变量）；
+    # windows/linux 打包为 roadmap 工作（build/windows 尚无 Taskfile，无 build/linux）。
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS：Apple Silicon 与 Intel 分别跑（各自原生编译，不跨架构）
+          - os: macos-latest
+            platform: darwin/arm64
+          - os: macos-13
+            platform: darwin/amd64
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.3
+
+      - name: Wails build
+        # 各 runner 原生构建：wails3 build → {{OS}}:build（darwin:build，ARCH 默认本机架构）
+        run: wails3 build

@@ -1,0 +1,54 @@
+version: "2"
+run:
+  tests: true
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    govet:
+      enable-all: false
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gocritic
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - nomad-manager
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

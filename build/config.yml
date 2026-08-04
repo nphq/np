@@ -1,0 +1,44 @@
+# Wails v3 项目配置。`wails3 dev/build/package` 都读这里。
+# 更新 info 后跑 `wails3 task common:update:build-assets` 同步构建产物。
+version: '3'
+
+info:
+  companyName: "Sphinx"
+  productName: "Nomad Panel"
+  productIdentifier: "com.wails.nomad-panel"
+  description: "Nomad cluster manager desktop app"
+  copyright: "© 2026, Sphinx"
+  comments: "Nomad Panel"
+  version: "0.1.0"
+
+# `wails3 dev` 模式：监听 .go 改动 → 重启；前端由 vite dev server（5173）实时刷新。
+# 后端通过 FRONTEND_DEVSERVER_URL 环境变量（由 wails3 dev -port 注入）走代理到 vite。
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - frontend
+      - bin
+      - build/bin
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+    watched_extension:
+      - "*.go"
+    git_ignore: true
+  executes:
+    - cmd: wails3 task common:install:frontend:deps
+      type: once
+    - cmd: wails3 task common:dev:frontend
+      type: background
+    - cmd: go mod tidy
+      type: blocking
+    - cmd: wails3 task build
+      type: blocking
+    - cmd: wails3 task run
+      type: primary

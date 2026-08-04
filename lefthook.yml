@@ -1,0 +1,28 @@
+# https://lefthook.dev/configuration/
+pre-commit:
+  parallel: true
+  jobs:
+    - name: prettier
+      root: frontend/
+      glob: "frontend/**/*.{js,ts,svelte,css,json,html,md}"
+      exclude:
+        - frontend/bindings/**
+        - frontend/node_modules/**
+      run: bun prettier --write {staged_files}
+      stage_fixed: true
+
+    - name: eslint
+      root: frontend/
+      glob: "frontend/**/*.{js,ts,svelte}"
+      exclude:
+        - frontend/bindings/**
+        - frontend/node_modules/**
+      run: bun eslint --fix {staged_files}
+      stage_fixed: true
+
+    - name: gofmt
+      glob: "*.go"
+      exclude:
+        - "**/*.gen.go"
+      run: gofmt -l -w {staged_files}
+      stage_fixed: true

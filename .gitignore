@@ -1,0 +1,54 @@
+# Build artifacts
+bin/
+build/bin
+build/darwin/*.app
+build/darwin/*.dmg
+build/windows/*.exe
+
+# Go test / profiling / coverage
+*.test
+*.prof
+*.pprof
+coverage.out
+coverage*.html
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/package.json.md5
+frontend/.bindings-tmp-*/
+frontend/.vite/
+*.tsbuildinfo
+
+# Wails / Task
+.task/
+
+# OS
+.DS_Store
+Thumbs.db
+.Trashes
+.Spotlight-V100
+.AppleDouble
+.LSOverride
+Icon\r
+
+# IDE / editor
+.idea/
+.vscode/
+.history/
+*.swp
+*.swo
+*~
+*.tmp
+
+# Logs
+*.log
+
+# AI tool caches
+.claude/
+.opencode/
+
+# Env / local config
+*.local
+.env
+.env.*
