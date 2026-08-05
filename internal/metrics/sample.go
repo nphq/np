@@ -20,19 +20,19 @@ func usageSample(t int64, u nomad.ResourceUsage) nomad.LoadSample {
 	return nomad.LoadSample{Time: t, CPU: u.CPU, Memory: u.Memory, Disk: u.Disk}
 }
 
-// appendSample 是环形缓冲：满 cap 丢最旧。
-func appendSample(samples []nomad.LoadSample, s nomad.LoadSample, cap int) []nomad.LoadSample {
-	if cap <= 0 {
-		cap = 60
+// appendSample 是环形缓冲：满 maxLen 丢最旧。
+func appendSample(samples []nomad.LoadSample, s nomad.LoadSample, maxLen int) []nomad.LoadSample {
+	if maxLen <= 0 {
+		maxLen = 60
 	}
-	if len(samples) < cap {
+	if len(samples) < maxLen {
 		return append(samples, s)
 	}
 	n := len(samples)
 	if n == 0 {
 		return []nomad.LoadSample{s}
 	}
-	out := make([]nomad.LoadSample, n, cap)
+	out := make([]nomad.LoadSample, n, maxLen)
 	copy(out, samples[1:])
 	out[n-1] = s
 	return out

@@ -42,7 +42,7 @@ func NewApp() *App {
 
 // ServiceStartup 实现 application.ServiceStartup。在 application.Run 启动时调用。
 // 用 application.Get() 拿到自身 app 引用注入给需要 emit 事件的 service。
-func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	a.ctx = ctx
 	app := application.Get()
 	a.clusters.SetApp(app)
@@ -206,6 +206,33 @@ func (a *App) StopAlloc(clusterID, allocID string) (any, error) {
 		return e, nil
 	}
 	return nil, nil
+}
+
+// GetEvaluation 返回评估状态（部署进度）。
+func (a *App) GetEvaluation(clusterID, evalID string) (any, error) {
+	info, e := a.jobs.GetEvaluation(clusterID, evalID)
+	if e != nil {
+		return e, nil
+	}
+	return info, nil
+}
+
+// ListAllocTaskEvents 返回 alloc 任务事件时间线。
+func (a *App) ListAllocTaskEvents(clusterID, allocID string) (any, error) {
+	events, e := a.jobs.ListAllocTaskEvents(clusterID, allocID)
+	if e != nil {
+		return e, nil
+	}
+	return events, nil
+}
+
+// GetAllocLogs 拉取 alloc 任务日志快照。
+func (a *App) GetAllocLogs(clusterID, allocID, task, logType string) (any, error) {
+	logs, e := a.jobs.GetAllocLogs(clusterID, allocID, task, logType)
+	if e != nil {
+		return e, nil
+	}
+	return logs, nil
 }
 
 // --- nodes ---

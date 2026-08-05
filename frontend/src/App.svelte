@@ -7,12 +7,15 @@
   import { createJobsStore } from './lib/stores/jobs.svelte'
   import { i18n, t } from './lib/i18n/index.svelte'
   import AddClusterDialog from './lib/components/AddClusterDialog.svelte'
+  import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
   import OverviewScreen from './lib/components/load/OverviewScreen.svelte'
   import NodesScreen from './lib/components/nodes/NodesScreen.svelte'
   import NodeDetailScreen from './lib/components/nodes/NodeDetailScreen.svelte'
   import JobsScreen from './lib/components/jobs/JobsScreen.svelte'
   import JobDetailScreen from './lib/components/jobs/JobDetailScreen.svelte'
   import JobRunScreen from './lib/components/jobs/JobRunScreen.svelte'
+  import AppsScreen from './lib/components/apps/AppsScreen.svelte'
+  import SettingsScreen from './lib/components/SettingsScreen.svelte'
   import type { ClusterInput } from './lib/stores/clusters.svelte'
   import type { Page } from './lib/types/wails'
 
@@ -56,6 +59,7 @@
   const navItems = $derived<{ page: Page; label: string }[]>([
     { page: 'overview', label: t('nav.overview') },
     { page: 'jobs', label: t('nav.jobs') },
+    { page: 'apps', label: t('nav.apps') },
     { page: 'allocs', label: t('nav.allocs') },
     { page: 'nodes', label: t('nav.nodes') },
     { page: 'job-run', label: t('nav.runJob') },
@@ -81,11 +85,11 @@
     }
   }
 
-  async function onAdd(input: ClusterInput): Promise<boolean> {
+  async function onAdd(input: ClusterInput) {
     return clusters.addCluster(input)
   }
 
-  async function onEdit(input: ClusterInput): Promise<boolean> {
+  async function onEdit(input: ClusterInput) {
     return clusters.updateCluster(input)
   }
 
@@ -122,26 +126,17 @@
       <span class="text-sm font-semibold tracking-wide">{t('app.title')}</span>
     </div>
     <div class="flex items-center gap-3 text-xs text-zinc-400">
-      <div class="flex overflow-hidden rounded border border-zinc-700">
-        <button
-          class="px-2 py-0.5 {i18n.locale === 'zh'
-            ? 'bg-zinc-100 font-medium text-zinc-900'
-            : 'text-zinc-400 hover:bg-zinc-800'}"
-          onclick={() => i18n.setLocale('zh')}
-          title="中文"
-        >
-          中
-        </button>
-        <button
-          class="px-2 py-0.5 {i18n.locale === 'en'
-            ? 'bg-zinc-100 font-medium text-zinc-900'
-            : 'text-zinc-400 hover:bg-zinc-800'}"
-          onclick={() => i18n.setLocale('en')}
-          title="English"
-        >
-          EN
-        </button>
-      </div>
+      <button
+        class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 {ui
+          .route.page === 'settings'
+          ? 'border-sky-600 bg-zinc-800 text-sky-300'
+          : ''}"
+        title={t('nav.settings')}
+        aria-label={t('nav.settings')}
+        onclick={() => ui.navigate('settings')}
+      >
+        ⚙
+      </button>
       <span class={`h-2 w-2 rounded-full ${active ? healthDot(active.info.health) : 'bg-zinc-600'}`}
       ></span>
       <span>{active ? active.info.health : t('app.noCluster')}</span>
@@ -242,11 +237,22 @@
       >
         {t('app.addCluster')}
       </button>
+      <button
+        class="mt-1 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-800 {ui.route.page ===
+        'settings'
+          ? 'bg-zinc-800 font-medium text-zinc-100'
+          : 'text-zinc-400'}"
+        onclick={() => ui.navigate('settings')}
+      >
+        {t('nav.settings')}
+      </button>
     </aside>
 
-    <!-- Content -->
+    <!-- Content：设置不依赖活跃集群（对标 Lens Preferences） -->
     <main class="flex min-w-0 flex-1 flex-col overflow-y-auto">
-      {#if active}
+      {#if ui.route.page === 'settings'}
+        <SettingsScreen />
+      {:else if active}
         {#if ui.route.page === 'overview'}
           <OverviewScreen
             clusterName={active.info.name || active.info.id}
@@ -288,20 +294,60 @@
             allocs={jobs.state.detailAllocs}
             loading={jobs.state.detailLoading}
             busyOp={jobs.state.busyOp}
-            onBack={() => ui.navigate('jobs')}
-            onRefresh={() => void jobs.reloadDetail(active.info.id)}
-            onEvaluate={(jobID) => void jobs.evaluate(active.info.id, jobID)}
-            onStop={(jobID, purge) => void jobs.stop(active.info.id, jobID, purge)}
-            onScale={(jobID, group, count) => void jobs.scale(active.info.id, jobID, group, count)}
+            clusterID={active.info.id}
+            deployEvalID={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
+              ? (jobs.state.lastDeploy?.evalID ?? '')
+              : (ui.route.params.evalID ?? '')}
+            deployWarnings={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
+              ? (jobs.state.lastDeploy?.warnings ?? '')
+              : ''}
+            showDeployProgress={ui.route.params.deploy === '1' ||
+              (jobs.state.lastDeploy?.jobID === ui.route.params.jobID &&
+                !!jobs.state.lastDeploy?.evalID)}
+            onBack={() => {
+              jobs.clearLastDeploy()
+              ui.navigate('jobs')
+            }}
+            onRefresh={() => jobs.reloadDetail(active.info.id)}
+            onEvaluate={(jobID) => jobs.evaluate(active.info.id, jobID)}
+            onStop={(jobID, purge) => jobs.stop(active.info.id, jobID, purge)}
+            onScale={(jobID, group, count) => jobs.scale(active.info.id, jobID, group, count)}
             onRestartAlloc={(allocID, taskName) =>
-              void jobs.restartAlloc(active.info.id, allocID, taskName)}
-            onStopAlloc={(allocID) => void jobs.stopAlloc(active.info.id, allocID)}
+              jobs.restartAlloc(active.info.id, allocID, taskName)}
+            onStopAlloc={(allocID) => jobs.stopAlloc(active.info.id, allocID)}
+            onFetchEval={(evalID) => jobs.getEvaluation(active.info.id, evalID)}
+            onLoadEvents={(allocID) => jobs.listAllocEvents(active.info.id, allocID)}
+            onLoadLogs={(allocID, task, logType) =>
+              jobs.getAllocLogs(active.info.id, allocID, task, logType)}
+          />
+        {:else if ui.route.page === 'apps'}
+          <AppsScreen
+            busy={jobs.state.busyOp !== null}
+            selectedId={ui.route.params.appID ?? null}
+            existingJobIDs={jobs.list.map((j) => j.id)}
+            onSelect={(appID) => ui.navigate('apps', appID ? { appID } : {})}
+            onCustomize={(appID) => ui.navigate('job-run', { app: appID })}
+            onRun={(input) => jobs.runJob(active.info.id, input)}
+            onDone={(jobID) =>
+              ui.navigate('job-detail', {
+                jobID,
+                deploy: '1',
+                evalID: jobs.state.lastDeploy?.evalID ?? '',
+              })}
           />
         {:else if ui.route.page === 'job-run'}
           <JobRunScreen
             busy={jobs.state.busyOp !== null}
+            presetAppId={ui.route.params.app ?? null}
+            existingJobIDs={jobs.list.map((j) => j.id)}
             onRun={(input) => jobs.runJob(active.info.id, input)}
-            onDone={(jobID) => ui.navigate('job-detail', { jobID })}
+            onDone={(jobID) =>
+              ui.navigate('job-detail', {
+                jobID,
+                deploy: '1',
+                evalID: jobs.state.lastDeploy?.evalID ?? '',
+              })}
+            onBrowseApps={() => ui.navigate('apps')}
           />
         {:else}
           <section class="mx-auto w-full max-w-4xl p-6">
@@ -359,35 +405,16 @@
 
   <!-- Confirm remove -->
   {#if confirmRemove}
-    <button
-      class="fixed inset-0 z-50 w-full cursor-default border-none bg-black/60 p-0"
-      aria-label={t('common.cancel')}
-      onclick={() => (confirmRemove = null)}
-    ></button>
-    <div class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        class="pointer-events-auto w-[360px] rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-2xl"
-      >
-        <h2 class="text-sm font-semibold">{t('cluster.removeTitle')}</h2>
-        <p class="mt-2 text-xs text-zinc-400">
-          {t('cluster.removeBody', { name: confirmRemove })}
-        </p>
-        <div class="mt-4 flex justify-end gap-2">
-          <button
-            class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-            onclick={() => (confirmRemove = null)}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            class="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
-            onclick={() => void handleRemove(confirmRemove!)}
-          >
-            {t('cluster.remove')}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      title={t('cluster.removeTitle')}
+      message={t('cluster.removeBody', { name: confirmRemove })}
+      confirmLabel={t('cluster.remove')}
+      danger
+      onConfirm={() => {
+        if (confirmRemove) void handleRemove(confirmRemove)
+      }}
+      onCancel={() => (confirmRemove = null)}
+    />
   {/if}
 
   {#if showAddDialog}

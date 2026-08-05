@@ -65,7 +65,7 @@ func fetchString(ctx context.Context, t ProbeTarget, path string) (string, error
 	if err != nil {
 		return "", err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	var s string
 	if err := json.NewDecoder(body).Decode(&s); err != nil {
 		return "", fmt.Errorf("decode %s: %w", path, err)
@@ -80,7 +80,7 @@ func fetchVersion(ctx context.Context, t ProbeTarget) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	var raw struct {
 		Config map[string]json.RawMessage `json:"config"`
 	}
@@ -123,7 +123,7 @@ func rawGet(ctx context.Context, t ProbeTarget, path string) (io.ReadCloser, err
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("%s: %s", path, resp.Status)
 	}
 	return resp.Body, nil

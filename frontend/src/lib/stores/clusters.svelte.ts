@@ -87,18 +87,19 @@ export function createClustersStore() {
     }
   }
 
-  async function addCluster(input: ClusterInput): Promise<boolean> {
+  async function addCluster(
+    input: ClusterInput,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
       const err = await AddCluster(input)
       if (isErr(err)) {
-        toastErr(err)
-        return false
+        return { ok: false, error: (err as { message: string }).message }
       }
       await refresh()
-      return true
+      return { ok: true }
     } catch (err) {
       console.error('[clusters] addCluster failed:', err)
-      return false
+      return { ok: false, error: `${err}` }
     }
   }
 
@@ -118,18 +119,19 @@ export function createClustersStore() {
     }
   }
 
-  async function updateCluster(input: ClusterInput): Promise<boolean> {
+  async function updateCluster(
+    input: ClusterInput,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
       const err = await UpdateCluster(input)
       if (isErr(err)) {
-        toastErr(err)
-        return false
+        return { ok: false, error: (err as { message: string }).message }
       }
       await refresh()
-      return true
+      return { ok: true }
     } catch (err) {
       console.error('[clusters] updateCluster failed:', err)
-      return false
+      return { ok: false, error: `${err}` }
     }
   }
 

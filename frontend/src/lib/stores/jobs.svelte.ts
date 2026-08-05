@@ -1,6 +1,9 @@
 import {
   EvaluateJob,
+  GetAllocLogs,
+  GetEvaluation,
   GetJob,
+  ListAllocTaskEvents,
   ListJobAllocations,
   ListJobs,
   RestartAlloc,
@@ -38,6 +41,8 @@ export function createJobsStore() {
     detailAllocs: nomad.AllocSummary[]
     detailLoading: boolean
     busyOp: string | null
+    /** 最近一次部署回执，详情页用于进度条 */
+    lastDeploy: nomad.JobRunResult | null
   }>({
     // 整表替换，不原地 mutate（同 nodes store 约定）
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -47,6 +52,7 @@ export function createJobsStore() {
     detailAllocs: [],
     detailLoading: false,
     busyOp: null,
+    lastDeploy: null,
   })
 
   const list = $derived([...state.byId.values()])
@@ -119,12 +125,14 @@ export function createJobsStore() {
       if (isErr(res)) {
         return { ok: false, err: res }
       }
+      const result = res as nomad.JobRunResult
+      state.lastDeploy = result
       toast({
         level: 'success',
         message: t('toast.jobSubmitted'),
       })
       await refresh(clusterID)
-      return { ok: true, result: res as nomad.JobRunResult }
+      return { ok: true, result }
     } catch (err) {
       console.error('[jobs] runJob failed:', err)
       return { ok: false, err: { code: 'runtime', message: `${err}` } }
@@ -253,6 +261,61 @@ export function createJobsStore() {
     state.detail = null
     state.detailAllocs = []
     state.busyOp = null
+    state.lastDeploy = null
+  }
+
+  async function getEvaluation(clusterID: string, evalID: string): Promise<nomad.EvalInfo | null> {
+    try {
+      const res = await GetEvaluation(clusterID, evalID)
+      if (isErr(res)) {
+        toastErr(res)
+        return null
+      }
+      return res as nomad.EvalInfo
+    } catch (err) {
+      console.error('[jobs] getEvaluation failed:', err)
+      return null
+    }
+  }
+
+  async function listAllocEvents(
+    clusterID: string,
+    allocID: string,
+  ): Promise<nomad.AllocTaskEvent[]> {
+    try {
+      const res = await ListAllocTaskEvents(clusterID, allocID)
+      if (isErr(res)) {
+        toastErr(res)
+        return []
+      }
+      return (res as nomad.AllocTaskEvent[]) ?? []
+    } catch (err) {
+      console.error('[jobs] listAllocEvents failed:', err)
+      return []
+    }
+  }
+
+  async function getAllocLogs(
+    clusterID: string,
+    allocID: string,
+    task: string,
+    logType: string,
+  ): Promise<nomad.AllocLogsResult | null> {
+    try {
+      const res = await GetAllocLogs(clusterID, allocID, task, logType)
+      if (isErr(res)) {
+        toastErr(res)
+        return null
+      }
+      return res as nomad.AllocLogsResult
+    } catch (err) {
+      console.error('[jobs] getAllocLogs failed:', err)
+      return null
+    }
+  }
+
+  function clearLastDeploy(): void {
+    state.lastDeploy = null
   }
 
   return {
@@ -271,6 +334,10 @@ export function createJobsStore() {
     scale,
     restartAlloc,
     stopAlloc,
+    getEvaluation,
+    listAllocEvents,
+    getAllocLogs,
+    clearLastDeploy,
     clear,
   }
 }

@@ -9,14 +9,16 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
-      'bindings/**', // Wails 自动生成（frontend/bindings/），勿 lint
+      'bindings/**', // Wails 自动生成，勿 lint / format
+      '.bindings-tmp-*/**', // wails3 generate 临时目录
       '.svelte-kit/**',
       'node_modules/**',
     ],
   },
 
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  // strict 比 recommended 更接近开源仓库基线（仍不含 type-checked，避免 Svelte 工程摩擦）
+  ...tseslint.configs.strict,
   ...svelte.configs['flat/recommended'],
 
   // Svelte 文件：用 svelte-parser 解析 TS
@@ -29,7 +31,7 @@ export default tseslint.config(
     },
   },
 
-  // Svelte 5 runes 模块（.svelte.ts/.svelte.js）：typescrit-eslint parser 原生支持
+  // Svelte 5 runes 模块（.svelte.ts/.svelte.js）
   {
     files: ['**/*.svelte.ts', '**/*.svelte.js'],
     languageOptions: {
@@ -37,7 +39,7 @@ export default tseslint.config(
     },
   },
 
-  // 全局：补 wails runtime / browser 全局变量
+  // 全局：browser + Wails
   {
     languageOptions: {
       globals: {
@@ -51,11 +53,24 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/no-explicit-any': 'off', // wails 生成的类型含 any
+      // Wails 绑定与 IPC 边界仍有 any；降为 warn，避免新代码无意识扩散
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-non-null-assertion': 'warn',
       'no-empty': ['error', { allowEmptyCatch: true }],
+      eqeqeq: ['error', 'smart'],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'prefer-const': 'error',
+    },
+  },
+
+  // Svelte 5：$props() 必须用 let 解构（可被父组件更新），prefer-const 会误报
+  {
+    files: ['**/*.svelte'],
+    rules: {
+      'prefer-const': 'off',
     },
   },
 

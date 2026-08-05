@@ -3,57 +3,57 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Create as $Create } from '@wailsio/runtime'
+import { Create as $Create } from "@wailsio/runtime";
 
 /**
  * ClusterInput 是 AddCluster 的前端入参。Token 只进 Keychain，绝不落盘。
  */
 export class ClusterInput {
-  'id': string
-  'name': string
-  'address': string
-  'region': string
-  'namespace': string
-  'tls': boolean
-  'insecureSkipVerify'?: boolean
+    "id": string;
+    "name": string;
+    "address": string;
+    "region": string;
+    "namespace": string;
+    "tls": boolean;
+    "insecureSkipVerify"?: boolean;
 
-  /**
-   * 可选：留空则沿用 Keychain 已有 token
-   */
-  'token': string
+    /**
+     * 可选：留空则沿用 Keychain 已有 token
+     */
+    "token": string;
 
-  /** Creates a new ClusterInput instance. */
-  constructor($$source: Partial<ClusterInput> = {}) {
-    if (!('id' in $$source)) {
-      this['id'] = ''
-    }
-    if (!('name' in $$source)) {
-      this['name'] = ''
-    }
-    if (!('address' in $$source)) {
-      this['address'] = ''
-    }
-    if (!('region' in $$source)) {
-      this['region'] = ''
-    }
-    if (!('namespace' in $$source)) {
-      this['namespace'] = ''
-    }
-    if (!('tls' in $$source)) {
-      this['tls'] = false
-    }
-    if (!('token' in $$source)) {
-      this['token'] = ''
+    /** Creates a new ClusterInput instance. */
+    constructor($$source: Partial<ClusterInput> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("address" in $$source)) {
+            this["address"] = "";
+        }
+        if (!("region" in $$source)) {
+            this["region"] = "";
+        }
+        if (!("namespace" in $$source)) {
+            this["namespace"] = "";
+        }
+        if (!("tls" in $$source)) {
+            this["tls"] = false;
+        }
+        if (!("token" in $$source)) {
+            this["token"] = "";
+        }
+
+        Object.assign(this, $$source);
     }
 
-    Object.assign(this, $$source)
-  }
-
-  /**
-   * Creates a new ClusterInput instance from a string or object.
-   */
-  static createFrom($$source: any = {}): ClusterInput {
-    let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source
-    return new ClusterInput($$parsedSource as Partial<ClusterInput>)
-  }
+    /**
+     * Creates a new ClusterInput instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ClusterInput {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ClusterInput($$parsedSource as Partial<ClusterInput>);
+    }
 }

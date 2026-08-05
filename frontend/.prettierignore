@@ -2,5 +2,7 @@ dist
 build
 node_modules
 bun.lock
-wailsjs
+bindings
 .vite
+.svelte-kit
+*.md5

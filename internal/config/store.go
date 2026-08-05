@@ -46,7 +46,8 @@ func DefaultDir() (string, error) {
 		base = filepath.Join(home, ".config")
 	}
 	dir := filepath.Join(base, "nomad-manager")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// 目录来自 XDG/HOME，非请求路径；0750 限制同用户组外访问。
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // G703: trusted config home, not user path input
 		return "", err
 	}
 	return dir, nil
@@ -119,7 +120,7 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o750); err != nil {
 		return err
 	}
 	tmp := s.path + ".tmp"

@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [svelte(), tailwindcss()],
   build: {
     target: 'es2022',
+    chunkSizeWarningLimit: 4500,
+  },
+  worker: {
+    format: 'es',
   },
   // 端口与 wails3 dev 对齐：裸 `wails3 dev` 期待 9245（默认），
   // `wails3 dev -port X`（Taskfile dev 任务）通过 WAILS_VITE_PORT 覆盖。

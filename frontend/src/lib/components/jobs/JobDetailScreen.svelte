@@ -1,8 +1,9 @@
 <script lang="ts">
-  // JobDetailScreen 是 job 详情屏＼�：job 元信息 + task group 计数 +
-  // allocs 表（Restart/Stop alloc）+ 管理操作（Evaluate / Scale / Stop）。
-  // 所有写操作统一 ConfirmDialog 二次确认 + busyOp 串行（ADR-13）。
+  // JobDetailScreen：job 元信息 + task group + allocs（日志/重启/停止）+ 部署进度。
+  // 写操作统一 ConfirmDialog 二次确认 + busyOp 串行（ADR-13）。
   import ConfirmDialog from '../ConfirmDialog.svelte'
+  import DeployProgress from './DeployProgress.svelte'
+  import AllocObservePanel from './AllocObservePanel.svelte'
   import { t, statusLabel } from '../../i18n/index.svelte'
   import type { nomad } from '../../types/wails'
 
@@ -11,6 +12,10 @@
     allocs,
     loading,
     busyOp,
+    clusterID,
+    deployEvalID = '',
+    deployWarnings = '',
+    showDeployProgress = false,
     onBack,
     onRefresh,
     onEvaluate,
@@ -18,19 +23,36 @@
     onScale,
     onRestartAlloc,
     onStopAlloc,
+    onFetchEval,
+    onLoadEvents,
+    onLoadLogs,
   }: {
     detail: nomad.JobDetail | null
     allocs: nomad.AllocSummary[]
     loading: boolean
     busyOp: string | null
+    clusterID: string
+    deployEvalID?: string
+    deployWarnings?: string
+    showDeployProgress?: boolean
     onBack: () => void
-    onRefresh: () => void
-    onEvaluate: (jobID: string) => void
-    onStop: (jobID: string, purge: boolean) => void
-    onScale: (jobID: string, group: string, count: number) => void
-    onRestartAlloc: (allocID: string, taskName: string) => void
-    onStopAlloc: (allocID: string) => void
+    onRefresh: () => void | Promise<void>
+    onEvaluate: (jobID: string) => Promise<unknown>
+    onStop: (jobID: string, purge: boolean) => Promise<unknown>
+    onScale: (jobID: string, group: string, count: number) => Promise<unknown>
+    onRestartAlloc: (allocID: string, taskName: string) => Promise<unknown>
+    onStopAlloc: (allocID: string) => Promise<unknown>
+    onFetchEval: (evalID: string) => Promise<nomad.EvalInfo | null>
+    onLoadEvents: (allocID: string) => Promise<nomad.AllocTaskEvent[]>
+    onLoadLogs: (
+      allocID: string,
+      task: string,
+      logType: string,
+    ) => Promise<nomad.AllocLogsResult | null>
   } = $props()
+
+  let observeAlloc = $state<nomad.AllocSummary | null>(null)
+  let scaleError = $state('')
 
   // pending 是待确认的写操作：{ kind, jobID?, group?, count?, allocID? }
   let pending = $state<{
@@ -110,13 +132,14 @@
       case 'scale':
         return {
           title: t('jobDetail.confirmScaleTitle', { group: pending.group ?? '' }),
-          message: t('jobDetail.confirmScaleBody', {
-            jobID: pending.jobID ?? '',
-            group: pending.group ?? '',
-            count: String(pending.count ?? 0),
-          }),
+          message:
+            t('jobDetail.confirmScaleBody', {
+              jobID: pending.jobID ?? '',
+              group: pending.group ?? '',
+              count: String(pending.count ?? 0),
+            }) + ((pending.count ?? 0) === 0 ? '\n\n' + t('jobDetail.confirmScaleZeroWarn') : ''),
           confirmLabel: t('jobDetail.scale'),
-          danger: false,
+          danger: (pending.count ?? 0) === 0,
           busy: busyOp === `scale:${pending.jobID}`,
         }
       case 'restart':
@@ -148,26 +171,30 @@
     }
   }
 
-  function confirm(): void {
+  async function confirm(): Promise<void> {
     if (!pending) return
-    switch (pending.kind) {
-      case 'evaluate':
-        onEvaluate(pending.jobID!)
-        break
-      case 'stop':
-        onStop(pending.jobID!, pending.purge ?? false)
-        break
-      case 'scale':
-        onScale(pending.jobID!, pending.group!, pending.count!)
-        break
-      case 'restart':
-        onRestartAlloc(pending.allocID!, '')
-        break
-      case 'stopAlloc':
-        onStopAlloc(pending.allocID!)
-        break
+    const p = pending
+    try {
+      switch (p.kind) {
+        case 'evaluate':
+          await onEvaluate(p.jobID!)
+          break
+        case 'stop':
+          await onStop(p.jobID!, p.purge ?? false)
+          break
+        case 'scale':
+          await onScale(p.jobID!, p.group!, p.count!)
+          break
+        case 'restart':
+          await onRestartAlloc(p.allocID!, '')
+          break
+        case 'stopAlloc':
+          await onStopAlloc(p.allocID!)
+          break
+      }
+    } finally {
+      pending = null
     }
-    pending = null
   }
 </script>
 
@@ -234,6 +261,18 @@
     </div>
   </div>
 
+  {#if detail && showDeployProgress}
+    <DeployProgress
+      {detail}
+      {allocs}
+      evalID={deployEvalID}
+      warnings={deployWarnings}
+      {clusterID}
+      {onRefresh}
+      {onFetchEval}
+    />
+  {/if}
+
   {#if detail}
     <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
       {#each detail.taskGroups as tg (tg.name)}
@@ -266,25 +305,39 @@
               <div class="text-[10px] text-zinc-600">{t('jobDetail.complete')}</div>
             </div>
           </div>
-          <div class="mt-3 flex items-center gap-2">
-            <input
-              type="number"
-              min="0"
-              class="w-20 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right font-mono text-xs text-zinc-200 outline-none focus:border-sky-500"
-              bind:value={scales[tg.name]}
-              placeholder={String(tg.count)}
-            />
-            <button
-              class="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
-              disabled={busyOp !== null}
-              onclick={() => {
-                const n = Number(scales[tg.name])
-                if (Number.isNaN(n) || n < 0) return
-                pending = { kind: 'scale', jobID: detail.id, group: tg.name, count: n }
-              }}
-            >
-              {t('jobDetail.scale')}
-            </button>
+          <div class="mt-3 flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                class="w-20 rounded border bg-zinc-950 px-2 py-1 text-right font-mono text-xs text-zinc-200 outline-none focus:border-sky-500 {scaleError
+                  ? 'border-red-700'
+                  : 'border-zinc-700'}"
+                bind:value={scales[tg.name]}
+                placeholder={String(tg.count)}
+                oninput={() => (scaleError = '')}
+              />
+              <button
+                class="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                disabled={busyOp !== null}
+                onclick={() => {
+                  const raw = scales[tg.name]
+                  const n = Number(raw)
+                  if (raw === '' || Number.isNaN(n) || n < 0 || !Number.isInteger(n)) {
+                    scaleError = t('jobDetail.errScale')
+                    return
+                  }
+                  scaleError = ''
+                  pending = { kind: 'scale', jobID: detail.id, group: tg.name, count: n }
+                }}
+              >
+                {t('jobDetail.scale')}
+              </button>
+            </div>
+            <span class="text-[10px] text-zinc-600">{t('jobDetail.hintScale')}</span>
+            {#if scaleError}
+              <span class="text-[10px] text-red-400">{scaleError}</span>
+            {/if}
           </div>
         </div>
       {/each}
@@ -334,6 +387,13 @@
               <td class="px-3 py-2">
                 <div class="flex justify-end gap-1">
                   <button
+                    class="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800"
+                    title={t('observe.open')}
+                    onclick={() => (observeAlloc = a)}
+                  >
+                    {t('observe.open')}
+                  </button>
+                  <button
                     class="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
                     title={t('jobDetail.restartTitle')}
                     disabled={busyOp !== null}
@@ -372,8 +432,22 @@
       confirmLabel={meta.confirmLabel}
       danger={meta.danger}
       busy={meta.busy}
-      onConfirm={confirm}
-      onCancel={() => (pending = null)}
+      confirmPhrase={pending.kind === 'stop' && pending.purge ? (pending.jobID ?? '') : ''}
+      onConfirm={() => void confirm()}
+      onCancel={() => {
+        if (meta.busy) return
+        pending = null
+      }}
+    />
+  {/if}
+
+  {#if observeAlloc}
+    <AllocObservePanel
+      alloc={observeAlloc}
+      {clusterID}
+      onClose={() => (observeAlloc = null)}
+      {onLoadEvents}
+      {onLoadLogs}
     />
   {/if}
 </div>

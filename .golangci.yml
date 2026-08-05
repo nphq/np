@@ -1,43 +1,102 @@
+# https://golangci-lint.run/docs/configuration/
+# 目标：开源仓库常见基线（正确性 + 安全 + 风格），避免过噪的文档类规则。
 version: "2"
+
 run:
   tests: true
+
 linters:
   default: none
   enable:
+    - copyloopvar
+    - durationcheck
     - errcheck
+    - errorlint
+    - forcetypeassert
     - gocritic
+    - gosec
     - govet
     - ineffassign
     - misspell
+    - nilerr
+    - revive
     - staticcheck
     - unconvert
     - unused
+    - usestdlibvars
+    - whitespace
   settings:
     govet:
       enable-all: false
     staticcheck:
       checks:
         - all
-        - -ST1000
-        - -ST1003
+        - -ST1000 # package comment form
+        - -ST1003 # mixed-caps names (IDs like JobID)
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    gosec:
+      excludes:
+        # errcheck 已覆盖未处理 error；G104 与之重复且噪声高
+        - G104
+    revive:
+      # 不启用 exported / package-comments：仓库以中文叙事注释为主，强制英文 GoDoc 收益低、噪声大
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
   exclusions:
     generated: lax
     presets:
       - comments
       - common-false-positives
-      - legacy
-      - std-error-handling
+      # 故意不启用 std-error-handling / legacy：要求显式处理 Close 等错误
     rules:
       - linters:
           - gocritic
         path: _test\.go
+      - linters:
+          - revive
+        text: "unused-parameter"
+        path: _test\.go
+      # Wails bound 方法约定：业务错误放 data 槽，error 槽恒 nil（见 app.go 注释）
+      - linters:
+          - nilerr
+        path: (^|/)app\.go$
+      - linters:
+          - gosec
+        path: internal/e2e/
     paths:
       - third_party$
       - builtin$
       - examples$
+      - ^frontend/
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
 formatters:
   enable:
     - gofmt
@@ -45,10 +104,11 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - nomad-manager
+        - github.com/nphq/np
   exclusions:
     generated: lax
     paths:
       - third_party$
       - builtin$
       - examples$
+      - ^frontend/

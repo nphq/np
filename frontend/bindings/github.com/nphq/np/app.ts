@@ -10,171 +10,169 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import {
-  Call as $Call,
-  CancellablePromise as $CancellablePromise,
-  Create as $Create,
-} from '@wailsio/runtime'
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as uiapi$0 from './internal/uiapi/models.js'
+import * as uiapi$0 from "./internal/uiapi/models.js";
 
 /**
  * AddCluster 新增集群（token 只进 Keychain）。
  */
 export function AddCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-  return $Call.ByID(1297766566, $in)
+    return $Call.ByID(1297766566, $in);
 }
 
 /**
  * EvaluateJob 强制重新评估 job，返回 EvalID。
  */
 export function EvaluateJob(clusterID: string, jobID: string): $CancellablePromise<any> {
-  return $Call.ByID(3390403861, clusterID, jobID)
+    return $Call.ByID(3390403861, clusterID, jobID);
 }
 
 /**
  * GetAllocLoad 返回单个 alloc 的 per-task 用量。
  */
 export function GetAllocLoad(clusterID: string, allocID: string): $CancellablePromise<any> {
-  return $Call.ByID(1987670824, clusterID, allocID)
+    return $Call.ByID(1987670824, clusterID, allocID);
+}
+
+/**
+ * GetAllocLogs 拉取 alloc 任务日志快照。
+ */
+export function GetAllocLogs(clusterID: string, allocID: string, task: string, logType: string): $CancellablePromise<any> {
+    return $Call.ByID(1567936159, clusterID, allocID, task, logType);
 }
 
 /**
  * GetClusterLoad 返回集群负载聚合快照（Overview 页）。
  */
 export function GetClusterLoad(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(2457669303, clusterID)
+    return $Call.ByID(2457669303, clusterID);
+}
+
+/**
+ * GetEvaluation 返回评估状态（部署进度）。
+ */
+export function GetEvaluation(clusterID: string, evalID: string): $CancellablePromise<any> {
+    return $Call.ByID(1182632685, clusterID, evalID);
 }
 
 /**
  * GetJob 返回单个 job 详情。
  */
 export function GetJob(clusterID: string, jobID: string): $CancellablePromise<any> {
-  return $Call.ByID(2134918486, clusterID, jobID)
+    return $Call.ByID(2134918486, clusterID, jobID);
 }
 
 /**
  * GetNodeLoads 返回全部节点负载（Nodes 屏首拉）。
  */
 export function GetNodeLoads(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(3098263772, clusterID)
+    return $Call.ByID(3098263772, clusterID);
+}
+
+/**
+ * ListAllocTaskEvents 返回 alloc 任务事件时间线。
+ */
+export function ListAllocTaskEvents(clusterID: string, allocID: string): $CancellablePromise<any> {
+    return $Call.ByID(3845726050, clusterID, allocID);
 }
 
 /**
  * ListClusters 返回全部集群及健康状态。
  */
 export function ListClusters(): $CancellablePromise<any> {
-  return $Call.ByID(2689603438)
+    return $Call.ByID(2689603438);
 }
 
 /**
  * ListJobAllocations 返回 job 下的 allocation 列表。
  */
 export function ListJobAllocations(clusterID: string, jobID: string): $CancellablePromise<any> {
-  return $Call.ByID(2916105591, clusterID, jobID)
+    return $Call.ByID(2916105591, clusterID, jobID);
 }
 
 /**
  * ListJobs 返回集群下的全部 job 摘要。
  */
 export function ListJobs(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(4257729417, clusterID)
+    return $Call.ByID(4257729417, clusterID);
 }
 
 /**
  * ListNodes 返回集群下的节点列表（容量 + 实时负载）。
  */
 export function ListNodes(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(3103789542, clusterID)
+    return $Call.ByID(3103789542, clusterID);
 }
 
 /**
  * RemoveCluster 删除集群。
  */
 export function RemoveCluster(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(624040237, clusterID)
+    return $Call.ByID(624040237, clusterID);
 }
 
 /**
  * RestartAlloc 重启 alloc 的任务（taskName 空=全部）。
  */
-export function RestartAlloc(
-  clusterID: string,
-  allocID: string,
-  taskName: string,
-): $CancellablePromise<any> {
-  return $Call.ByID(78022057, clusterID, allocID, taskName)
+export function RestartAlloc(clusterID: string, allocID: string, taskName: string): $CancellablePromise<any> {
+    return $Call.ByID(78022057, clusterID, allocID, taskName);
 }
 
 /**
  * RunJob 部署/更新 job（Parse → Validate → Register）。
  */
-export function RunJob(
-  clusterID: string,
-  spec: string,
-  format: string,
-  $namespace: string,
-  canonicalize: boolean,
-): $CancellablePromise<any> {
-  return $Call.ByID(3247404837, clusterID, spec, format, $namespace, canonicalize)
+export function RunJob(clusterID: string, spec: string, format: string, $namespace: string, canonicalize: boolean): $CancellablePromise<any> {
+    return $Call.ByID(3247404837, clusterID, spec, format, $namespace, canonicalize);
 }
 
 /**
  * ScaleJob 对 task group 扩缩容，返回 EvalID。
  */
-export function ScaleJob(
-  clusterID: string,
-  jobID: string,
-  group: string,
-  count: number,
-): $CancellablePromise<any> {
-  return $Call.ByID(1691104880, clusterID, jobID, group, count)
+export function ScaleJob(clusterID: string, jobID: string, group: string, count: number): $CancellablePromise<any> {
+    return $Call.ByID(1691104880, clusterID, jobID, group, count);
 }
 
 /**
  * SetActiveCluster 激活集群。
  */
 export function SetActiveCluster(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(4053701917, clusterID)
+    return $Call.ByID(4053701917, clusterID);
 }
 
 /**
  * StopAlloc 停止 alloc。
  */
 export function StopAlloc(clusterID: string, allocID: string): $CancellablePromise<any> {
-  return $Call.ByID(455674126, clusterID, allocID)
+    return $Call.ByID(455674126, clusterID, allocID);
 }
 
 /**
  * StopJob 停止 job（purge=true 清除历史记录），返回 EvalID。
  */
-export function StopJob(
-  clusterID: string,
-  jobID: string,
-  purge: boolean,
-): $CancellablePromise<any> {
-  return $Call.ByID(1508425892, clusterID, jobID, purge)
+export function StopJob(clusterID: string, jobID: string, purge: boolean): $CancellablePromise<any> {
+    return $Call.ByID(1508425892, clusterID, jobID, purge);
 }
 
 /**
  * TestConnection 手动探测连通性。
  */
 export function TestConnection(clusterID: string): $CancellablePromise<any> {
-  return $Call.ByID(1257240193, clusterID)
+    return $Call.ByID(1257240193, clusterID);
 }
 
 /**
  * TestConnectionInput 用未落盘的入参探测连通性（添加前的 Test 按钮）。
  */
 export function TestConnectionInput($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-  return $Call.ByID(782476599, $in)
+    return $Call.ByID(782476599, $in);
 }
 
 /**
  * UpdateCluster 编辑集群配置（token 空保留旧值）。
  */
 export function UpdateCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-  return $Call.ByID(520897430, $in)
+    return $Call.ByID(520897430, $in);
 }

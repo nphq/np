@@ -4,9 +4,19 @@
   import { TestConnectionInput } from '../../../bindings/github.com/nphq/np/app'
   import { isErr } from '../stores/clusters.svelte'
   import { t } from '../i18n/index.svelte'
+  import FormBanner from './FormBanner.svelte'
+  import {
+    addressLooksHTTPS,
+    isValidClusterID,
+    validateAddress,
+    validateClusterName,
+    validateNamespace,
+    validateRegion,
+  } from '../utils/validate'
   import type { nomad, uiapi } from '../types/wails'
 
   type Mode = 'add' | 'edit'
+  type SubmitResult = { ok: true } | { ok: false; error?: string }
 
   let {
     mode = 'add' as Mode,
@@ -18,16 +28,17 @@
     mode?: Mode
     initial?: ClusterInput
     hasToken?: boolean
-    onSubmit: (input: ClusterInput) => Promise<boolean>
+    onSubmit: (input: ClusterInput) => Promise<boolean | SubmitResult>
     onClose: () => void
   }>()
 
   let form = $state<ClusterInput>(new ClusterInput())
   let saving = $state(false)
   let error = $state('')
+  let fieldErrors = $state<Record<string, string>>({})
+  let idInput: HTMLInputElement | undefined = $state()
   let addressInput: HTMLInputElement | undefined = $state()
 
-  // Test 状态：'' | 'testing' | 'ok:<leader>:<version>' | 'fail:<msg>'
   let testState = $state<{
     kind: 'idle' | 'testing' | 'ok' | 'fail'
     leader?: string
@@ -36,52 +47,90 @@
   }>({ kind: 'idle' })
 
   onMount(() => {
-    // 拷贝 initial 防外部 mutation；edit 模式清掉 token（让用户决定是否重填）
     form = new ClusterInput()
     Object.assign(form, initial)
     if (mode === 'edit') form.token = ''
-    addressInput?.focus()
+    if (mode === 'edit') addressInput?.focus()
+    else idInput?.focus()
   })
 
   function cancel(): void {
     onClose()
   }
 
-  function inputFor(field: 'id' | 'name' | 'address' | 'region' | 'namespace' | 'token') {
-    return {
-      value: form[field],
-      oninput: (e: Event) => {
-        form[field] = (e.target as HTMLInputElement).value
-        // 任一字段变动后，上一次的 Test 结果就不再可信
-        if (testState.kind !== 'idle') testState = { kind: 'idle' }
-      },
+  function markDirty(): void {
+    if (testState.kind !== 'idle') testState = { kind: 'idle' }
+    error = ''
+  }
+
+  function onAddressInput(e: Event): void {
+    const v = (e.target as HTMLInputElement).value
+    form.address = v
+    // https:// 地址自动勾选 TLS，避免协议与开关不一致
+    if (addressLooksHTTPS(v)) form.tls = true
+    markDirty()
+    delete fieldErrors.address
+    fieldErrors = { ...fieldErrors }
+  }
+
+  function validateLocal(): boolean {
+    const next: Record<string, string> = {}
+    if (mode === 'add') {
+      const id = form.id.trim()
+      if (!id) next.id = t('cluster.errId')
+      else if (!isValidClusterID(id)) next.id = t('cluster.errIdFormat')
     }
+    if (!validateClusterName(form.name)) next.name = t('cluster.errName')
+    const addr = validateAddress(form.address)
+    if (!addr.ok) {
+      next.address =
+        addr.reason === 'empty'
+          ? t('cluster.errAddress')
+          : addr.reason === 'port'
+            ? t('cluster.errAddressPort')
+            : t('cluster.errAddressHost')
+    }
+    if (!validateRegion(form.region.trim())) next.region = t('cluster.errRegion')
+    if (!validateNamespace(form.namespace.trim())) next.namespace = t('cluster.errNamespace')
+    if (form.insecureSkipVerify && !form.tls) {
+      next.tls = t('cluster.errSkipNeedsTls')
+    }
+    fieldErrors = next
+    if (Object.keys(next).length > 0) {
+      error = Object.values(next).join('\n')
+      return false
+    }
+    error = ''
+    return true
+  }
+
+  function fieldClass(name: string): string {
+    const bad = !!fieldErrors[name]
+    return `w-full rounded border bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none disabled:cursor-not-allowed disabled:bg-zinc-900 disabled:text-zinc-500 ${
+      bad ? 'border-red-700 focus:border-red-500' : 'border-zinc-700 focus:border-zinc-500'
+    }`
   }
 
   async function submit(): Promise<void> {
-    error = ''
-    if (!form.id.trim()) {
-      error = t('cluster.errId')
-      return
-    }
-    if (!form.address.trim()) {
-      error = t('cluster.errAddress')
-      return
-    }
+    if (!validateLocal()) return
     saving = true
+    error = ''
     try {
-      const ok = await onSubmit(form)
-      if (ok) onClose()
+      const res = await onSubmit(form)
+      if (res === true || (typeof res === 'object' && res.ok)) {
+        onClose()
+        return
+      }
+      const msg =
+        typeof res === 'object' && !res.ok && res.error ? res.error : t('cluster.errSaveFailed')
+      error = msg
     } finally {
       saving = false
     }
   }
 
   async function runTest(): Promise<void> {
-    if (!form.id.trim() || !form.address.trim()) {
-      error = t('cluster.errAddress')
-      return
-    }
+    if (!validateLocal()) return
     testState = { kind: 'testing' }
     error = ''
     try {
@@ -145,19 +194,31 @@
         <label class="block">
           <span class="mb-1 block text-[11px] font-medium text-zinc-400">{t('cluster.id')}</span>
           <input
-            bind:this={addressInput}
-            {...inputFor('id')}
+            bind:this={idInput}
+            value={form.id}
+            oninput={(e) => {
+              form.id = (e.target as HTMLInputElement).value
+              markDirty()
+              delete fieldErrors.id
+              fieldErrors = { ...fieldErrors }
+            }}
             placeholder={t('cluster.placeholderId')}
             disabled={mode === 'edit'}
-            class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500 disabled:cursor-not-allowed disabled:bg-zinc-900 disabled:text-zinc-500"
+            spellcheck="false"
+            class={fieldClass('id')}
           />
+          <span class="mt-0.5 block text-[10px] text-zinc-600">{t('cluster.hintId')}</span>
         </label>
         <label class="block">
           <span class="mb-1 block text-[11px] font-medium text-zinc-400">{t('cluster.name')}</span>
           <input
-            {...inputFor('name')}
+            value={form.name}
+            oninput={(e) => {
+              form.name = (e.target as HTMLInputElement).value
+              markDirty()
+            }}
             placeholder={t('cluster.placeholderName')}
-            class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+            class={fieldClass('name')}
           />
         </label>
       </div>
@@ -168,11 +229,14 @@
       <label class="block">
         <span class="mb-1 block text-[11px] font-medium text-zinc-400">{t('cluster.address')}</span>
         <input
-          {...inputFor('address')}
+          bind:this={addressInput}
+          value={form.address}
+          oninput={onAddressInput}
           placeholder={t('cluster.placeholderAddress')}
           spellcheck="false"
-          class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+          class={fieldClass('address')}
         />
+        <span class="mt-0.5 block text-[10px] text-zinc-600">{t('cluster.hintAddress')}</span>
       </label>
 
       <div class="grid grid-cols-2 gap-3">
@@ -180,9 +244,13 @@
           <span class="mb-1 block text-[11px] font-medium text-zinc-400">{t('cluster.region')}</span
           >
           <input
-            {...inputFor('region')}
+            value={form.region}
+            oninput={(e) => {
+              form.region = (e.target as HTMLInputElement).value
+              markDirty()
+            }}
             placeholder={t('cluster.placeholderRegion')}
-            class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+            class={fieldClass('region')}
           />
         </label>
         <label class="block">
@@ -190,9 +258,13 @@
             >{t('cluster.namespace')}</span
           >
           <input
-            {...inputFor('namespace')}
+            value={form.namespace}
+            oninput={(e) => {
+              form.namespace = (e.target as HTMLInputElement).value
+              markDirty()
+            }}
             placeholder={t('cluster.placeholderNamespace')}
-            class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+            class={fieldClass('namespace')}
           />
         </label>
       </div>
@@ -200,12 +272,17 @@
       <label class="block">
         <span class="mb-1 block text-[11px] font-medium text-zinc-400">{t('cluster.token')}</span>
         <input
-          {...inputFor('token')}
+          value={form.token}
+          oninput={(e) => {
+            form.token = (e.target as HTMLInputElement).value
+            markDirty()
+          }}
           type="password"
           placeholder={mode === 'edit' ? t('cluster.tokenKeepHint') : t('cluster.placeholderToken')}
           autocomplete="off"
-          class="w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+          class={fieldClass('token')}
         />
+        <span class="mt-0.5 block text-[10px] text-zinc-600">{t('cluster.hintToken')}</span>
       </label>
       {#if mode === 'edit' && hasToken}
         <div class="-mt-1 text-[10px] text-emerald-500/80">{t('cluster.tokenSaved')}</div>
@@ -217,46 +294,50 @@
           checked={form.tls}
           onchange={(e) => {
             form.tls = (e.target as HTMLInputElement).checked
+            if (!form.tls) form.insecureSkipVerify = false
+            markDirty()
           }}
           class="accent-zinc-500"
         />
         {t('cluster.useHttps')}
       </label>
       {#if form.tls}
-        <label class="flex items-center gap-2 text-xs text-zinc-500">
-          <input
-            type="checkbox"
-            checked={form.insecureSkipVerify}
-            onchange={(e) => {
-              form.insecureSkipVerify = (e.target as HTMLInputElement).checked
-            }}
-            class="accent-zinc-500"
-          />
-          {t('cluster.skipVerify')}
+        <label class="flex flex-col gap-1 text-xs text-zinc-500">
+          <span class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.insecureSkipVerify}
+              onchange={(e) => {
+                form.insecureSkipVerify = (e.target as HTMLInputElement).checked
+                markDirty()
+              }}
+              class="accent-zinc-500"
+            />
+            {t('cluster.skipVerify')}
+          </span>
+          {#if form.insecureSkipVerify}
+            <span class="pl-6 text-[10px] text-amber-500/90">{t('cluster.hintSkipVerify')}</span>
+          {/if}
         </label>
       {/if}
 
       {#if testState.kind === 'ok'}
-        <div
-          class="rounded border border-emerald-900 bg-emerald-950/50 px-3 py-2 text-xs text-emerald-400"
-        >
-          {t('cluster.testOk', {
+        <FormBanner
+          kind="info"
+          message={t('cluster.testOk', {
             leader: testState.leader || '?',
             version: testState.version || '?',
           })}
-        </div>
+        />
       {:else if testState.kind === 'fail'}
-        <div
-          class="rounded border border-amber-900 bg-amber-950/50 px-3 py-2 text-xs text-amber-400"
-        >
-          {t('cluster.testFail', { error: testState.error || '' })}
-        </div>
+        <FormBanner
+          kind="warning"
+          message={t('cluster.testFail', { error: testState.error || '' })}
+        />
       {/if}
 
       {#if error}
-        <div class="rounded border border-red-900 bg-red-950/50 px-3 py-2 text-xs text-red-400">
-          {error}
-        </div>
+        <FormBanner kind="error" title={t('cluster.errTitle')} message={error} />
       {/if}
 
       <div class="flex justify-between gap-2 pt-1">

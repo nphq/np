@@ -136,6 +136,7 @@ func (c *Collector) Start() {
 	}()
 }
 
+// Stop 停止采集循环并等待退出。
 func (c *Collector) Stop() {
 	c.mu.Lock()
 	cancel := c.cancel
@@ -154,7 +155,7 @@ func (c *Collector) Stop() {
 func (c *Collector) Cache() *Cache { return c.cache }
 
 // Tick 跑一轮采集并 emit 变化。供周期循环与同步刷新（GetClusterLoad 首拉）共用。
-func (c *Collector) Tick(ctx context.Context) error {
+func (c *Collector) Tick(_ context.Context) error {
 	c.tickMu.Lock()
 	defer c.tickMu.Unlock()
 	client, err := c.get()

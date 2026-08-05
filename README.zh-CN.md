@@ -86,7 +86,10 @@ cd frontend && bun run lint  # eslint
 
 1. `go test ./...` 与 `scripts/e2e.sh` 通过
 2. `frontend/` 下 `bun run check && bun run lint && bun run format:check` 通过
-3. `golangci-lint run` 无报错
+3. `golangci-lint run` 无报错（见 `.golangci.yml`）
+4. 可用 `task lint` 一键跑与 CI 等价的质量门禁
+
+Hooks：`lefthook` 在 commit 时跑 Prettier/ESLint 与 `golangci-lint fmt` + `golangci-lint run`（由 `frontend` 的 `prepare` 安装）。
 
 ## 许可证
 

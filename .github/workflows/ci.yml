@@ -53,7 +53,8 @@ jobs:
           version: v2.11.4
 
       - name: Go test
-        run: go test ./...
+        # 排除 frontend/（含 node_modules 里偶发的 .go，如 flatted）
+        run: go test $(go list ./... | grep -v '/frontend/')
 
   e2e:
     name: E2E (Docker Nomad)

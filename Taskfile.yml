@@ -29,3 +29,22 @@ tasks:
     summary: Runs the application in development mode
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  lint:
+    summary: Run Go + frontend lint/format/typecheck (CI-equivalent quality gate)
+    cmds:
+      - golangci-lint run
+      - golangci-lint fmt --diff
+      - task: lint:frontend
+
+  lint:frontend:
+    dir: frontend
+    cmds:
+      - bun run lint
+      - bun run format:check
+      - bun run check
+
+  test:
+    summary: Run Go unit tests (excludes frontend/)
+    cmds:
+      - go test $(go list ./... | grep -v '/frontend/')

@@ -20,9 +20,17 @@ export namespace uiapi {
   }
 }
 
-// Page 是顶层路由枚举＼�：Overview/Jobs/Allocs/Nodes + Job 详情 + Run Job。
+// Page 是顶层路由枚举：Overview/Jobs/Allocs/Nodes/Apps + Job 详情 + Run Job + Settings。
 export type Page =
-  'overview' | 'jobs' | 'allocs' | 'nodes' | 'job-detail' | 'node-detail' | 'job-run'
+  | 'overview'
+  | 'jobs'
+  | 'allocs'
+  | 'nodes'
+  | 'apps'
+  | 'job-detail'
+  | 'node-detail'
+  | 'job-run'
+  | 'settings'
 
 export namespace nomad {
   export interface ClusterInfo {
@@ -188,5 +196,33 @@ export namespace nomad {
     evalID: string
     warnings?: string
     modifyIndex: number
+  }
+
+  export interface EvalInfo {
+    id: string
+    jobID: string
+    status: string
+    statusDescription: string
+    type: string
+    priority: number
+    blockedEval?: string
+    waitUntil?: number
+    failedSummary?: string
+  }
+
+  export interface AllocTaskEvent {
+    task: string
+    type: string
+    time: number
+    message: string
+    fails: boolean
+  }
+
+  export interface AllocLogsResult {
+    allocID: string
+    task: string
+    logType: string
+    content: string
+    truncated: boolean
   }
 }

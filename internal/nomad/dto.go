@@ -77,6 +77,38 @@ type JobRunResult struct {
 	ModifyIndex uint64 `json:"modifyIndex"`
 }
 
+// EvalInfo 是评估状态（部署进度用）。
+type EvalInfo struct {
+	ID                string `json:"id"`
+	JobID             string `json:"jobID"`
+	Status            string `json:"status"`
+	StatusDescription string `json:"statusDescription"`
+	Type              string `json:"type"`
+	Priority          int    `json:"priority"`
+	BlockedEval       string `json:"blockedEval,omitempty"`
+	WaitUntil         int64  `json:"waitUntil,omitempty"`
+	// FailedSummary 是调度失败的人类可读摘要（节点不足等）。
+	FailedSummary string `json:"failedSummary,omitempty"`
+}
+
+// AllocTaskEvent 是任务状态事件（启动失败原因等）。
+type AllocTaskEvent struct {
+	Task    string `json:"task"`
+	Type    string `json:"type"`
+	Time    int64  `json:"time"` // ms epoch
+	Message string `json:"message"`
+	Fails   bool   `json:"fails"`
+}
+
+// AllocLogsResult 是分配任务日志快照（非 follow）。
+type AllocLogsResult struct {
+	AllocID   string `json:"allocID"`
+	Task      string `json:"task"`
+	LogType   string `json:"logType"` // stdout | stderr
+	Content   string `json:"content"`
+	Truncated bool   `json:"truncated"`
+}
+
 // JobValidateResult 是服务端校验结果（RunJob 前置步骤的内联报错载体）。
 type JobValidateResult struct {
 	DriverConfigValidated bool     `json:"driverConfigValidated"`

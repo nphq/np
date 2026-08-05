@@ -86,7 +86,10 @@ Issues and pull requests are welcome. Before submitting a PR:
 
 1. `go test ./...` and `scripts/e2e.sh` pass
 2. `bun run check && bun run lint && bun run format:check` pass in `frontend/`
-3. `golangci-lint run` reports no issues
+3. `golangci-lint run` reports no issues (see `.golangci.yml`)
+4. Prefer `task lint` for a single CI-equivalent quality gate
+
+Hooks: `lefthook` runs Prettier/ESLint and `golangci-lint fmt` + `golangci-lint run` on commit (installed via `frontend` `prepare`).
 
 ## License
 

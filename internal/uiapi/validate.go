@@ -50,7 +50,7 @@ func ValidateAddress(addr string) (string, error) {
 	}
 	u, err := url.Parse(a)
 	if err != nil {
-		return "", fmt.Errorf("invalid address %q: %v", addr, err)
+		return "", fmt.Errorf("invalid address %q: %w", addr, err)
 	}
 	if u.Hostname() == "" {
 		return "", fmt.Errorf("invalid address %q: missing host", addr)

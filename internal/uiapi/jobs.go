@@ -218,3 +218,60 @@ func (s *JobsService) StopAlloc(clusterID, allocID string) *Error {
 	}
 	return nil
 }
+
+// GetEvaluation 返回评估状态（部署进度）。
+func (s *JobsService) GetEvaluation(clusterID, evalID string) (*nomad.EvalInfo, *Error) {
+	if err := ValidateClusterID(clusterID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	if strings.TrimSpace(evalID) == "" {
+		return nil, NewError(CodeInvalidInput, "eval id is required")
+	}
+	client, err := s.pool.Get(clusterID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	info, err := nomad.GetEvaluation(client, evalID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	return info, nil
+}
+
+// ListAllocTaskEvents 返回 alloc 任务事件时间线。
+func (s *JobsService) ListAllocTaskEvents(clusterID, allocID string) ([]nomad.AllocTaskEvent, *Error) {
+	if err := ValidateClusterID(clusterID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	if err := ValidateAllocID(allocID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	client, err := s.pool.Get(clusterID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	events, err := nomad.ListAllocTaskEvents(client, allocID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	return events, nil
+}
+
+// GetAllocLogs 拉取 alloc 任务日志快照（stdout/stderr）。
+func (s *JobsService) GetAllocLogs(clusterID, allocID, task, logType string) (*nomad.AllocLogsResult, *Error) {
+	if err := ValidateClusterID(clusterID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	if err := ValidateAllocID(allocID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	client, err := s.pool.Get(clusterID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	logs, err := nomad.GetAllocLogs(client, allocID, task, logType)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	return logs, nil
+}

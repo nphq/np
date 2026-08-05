@@ -8,6 +8,7 @@ pre-commit:
       exclude:
         - frontend/bindings/**
         - frontend/node_modules/**
+        - frontend/dist/**
       run: bun prettier --write {staged_files}
       stage_fixed: true
 
@@ -17,12 +18,21 @@ pre-commit:
       exclude:
         - frontend/bindings/**
         - frontend/node_modules/**
+        - frontend/dist/**
       run: bun eslint --fix {staged_files}
       stage_fixed: true
 
-    - name: gofmt
+    - name: golangci-fmt
       glob: "*.go"
       exclude:
         - "**/*.gen.go"
-      run: gofmt -l -w {staged_files}
+        - "frontend/**"
+      run: golangci-lint fmt
       stage_fixed: true
+
+    - name: golangci-lint
+      glob: "*.go"
+      exclude:
+        - "**/*.gen.go"
+        - "frontend/**"
+      run: golangci-lint run

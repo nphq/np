@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -106,7 +107,7 @@ func (p *Pool) build(clusterID string) (*api.Client, error) {
 		return nil, err
 	}
 	token, err := p.keyring.GetToken(clusterID)
-	if err != nil && err != secure.ErrTokenNotFound {
+	if err != nil && !errors.Is(err, secure.ErrTokenNotFound) {
 		return nil, fmt.Errorf("read token: %w", err)
 	}
 	client, err := p.factory(cfg, token)
@@ -152,7 +153,7 @@ func (p *Pool) ProbeTarget(clusterID string) (ProbeTarget, error) {
 		return ProbeTarget{}, err
 	}
 	token, err := p.keyring.GetToken(clusterID)
-	if err != nil && err != secure.ErrTokenNotFound {
+	if err != nil && !errors.Is(err, secure.ErrTokenNotFound) {
 		return ProbeTarget{}, fmt.Errorf("read token: %w", err)
 	}
 	return ProbeTarget{

@@ -39,7 +39,7 @@ type TaskStats struct {
 	MemoryUsedMB float64
 }
 
-// NodeStats 拉取节点实时用量（每节点 1 调用，A1 源）。
+// FetchNodeStats 拉取节点实时用量（每节点 1 调用，A1 源）。
 func FetchNodeStats(client *api.Client, nodeID string) (*NodeStats, error) {
 	hs, err := client.Nodes().Stats(nodeID, nil)
 	if err != nil {
