@@ -5,6 +5,32 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Nomad Panel</title>
     <script>
+      // 尽早应用主题/字体，避免首屏闪烁（与 appearance store 的 key 对齐）
+      ;(function () {
+        try {
+          var raw = localStorage.getItem('nm.appearance')
+          var a = raw ? JSON.parse(raw) : {}
+          var pref =
+            a.theme === 'light' || a.theme === 'system' || a.theme === 'dark' ? a.theme : 'dark'
+          var resolved =
+            pref === 'system'
+              ? window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : pref
+          var root = document.documentElement
+          root.dataset.theme = resolved
+          if (a.fontFamily === 'sans' || a.fontFamily === 'mono' || a.fontFamily === 'system') {
+            root.dataset.fontFamily = a.fontFamily
+          }
+          if (a.fontSize === 'sm' || a.fontSize === 'md' || a.fontSize === 'lg') {
+            root.dataset.fontSize = a.fontSize
+          }
+          root.style.colorScheme = resolved
+        } catch (e) {}
+      })()
+    </script>
+    <script>
       window.onerror = function (msg, src, line, col, err) {
         document.title = 'CRASH: ' + (err?.message || msg || 'unknown')
         return false

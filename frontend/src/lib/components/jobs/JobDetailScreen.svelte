@@ -54,15 +54,14 @@
   let observeAlloc = $state<nomad.AllocSummary | null>(null)
   let scaleError = $state('')
 
-  // pending 是待确认的写操作：{ kind, jobID?, group?, count?, allocID? }
-  let pending = $state<{
-    kind: string
-    jobID?: string
-    group?: string
-    count?: number
-    allocID?: string
-    purge?: boolean
-  } | null>(null)
+  type PendingAction =
+    | { kind: 'evaluate'; jobID: string }
+    | { kind: 'stop'; jobID: string; purge?: boolean }
+    | { kind: 'scale'; jobID: string; group: string; count: number }
+    | { kind: 'restart'; allocID: string }
+    | { kind: 'stopAlloc'; allocID: string }
+
+  let pending = $state<PendingAction | null>(null)
 
   const scales = $state<Record<string, string>>({})
 
@@ -177,19 +176,19 @@
     try {
       switch (p.kind) {
         case 'evaluate':
-          await onEvaluate(p.jobID!)
+          await onEvaluate(p.jobID)
           break
         case 'stop':
-          await onStop(p.jobID!, p.purge ?? false)
+          await onStop(p.jobID, p.purge ?? false)
           break
         case 'scale':
-          await onScale(p.jobID!, p.group!, p.count!)
+          await onScale(p.jobID, p.group, p.count)
           break
         case 'restart':
-          await onRestartAlloc(p.allocID!, '')
+          await onRestartAlloc(p.allocID, '')
           break
         case 'stopAlloc':
-          await onStopAlloc(p.allocID!)
+          await onStopAlloc(p.allocID)
           break
       }
     } finally {
@@ -397,7 +396,7 @@
                     class="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 disabled:opacity-50"
                     title={t('jobDetail.restartTitle')}
                     disabled={busyOp !== null}
-                    onclick={() => (pending = { kind: 'restart', allocID: a.id, count: 1 })}
+                    onclick={() => (pending = { kind: 'restart', allocID: a.id })}
                   >
                     {t('jobDetail.restart')}
                   </button>

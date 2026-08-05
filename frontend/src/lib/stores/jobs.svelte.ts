@@ -162,6 +162,57 @@ export function createJobsStore() {
     }
   }
 
+  /** 批量停止（可选 purge）；串行调用，结束后统一刷新列表。 */
+  async function stopMany(
+    clusterID: string,
+    jobIDs: string[],
+    purge: boolean,
+  ): Promise<{ ok: number; failed: string[] }> {
+    if (state.busyOp !== null) return { ok: 0, failed: [...jobIDs] }
+    const ids = jobIDs
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .filter((id, i, arr) => arr.indexOf(id) === i)
+    if (ids.length === 0) return { ok: 0, failed: [] }
+
+    state.busyOp = 'stopMany'
+    let ok = 0
+    const failed: string[] = []
+    try {
+      for (const jobID of ids) {
+        try {
+          const res = await StopJob(clusterID, jobID, purge)
+          if (isErr(res)) {
+            failed.push(jobID)
+            continue
+          }
+          ok++
+        } catch {
+          failed.push(jobID)
+        }
+      }
+      if (failed.length === 0) {
+        toast({
+          level: 'success',
+          message: t('toast.stoppedMany', { ok: String(ok), total: String(ids.length) }),
+        })
+      } else {
+        toast({
+          level: 'error',
+          message: t('toast.stoppedManyPartial', {
+            ok: String(ok),
+            fail: String(failed.length),
+            total: String(ids.length),
+          }),
+        })
+      }
+      await refresh(clusterID)
+      return { ok, failed }
+    } finally {
+      state.busyOp = null
+    }
+  }
+
   async function evaluate(clusterID: string, jobID: string): Promise<boolean> {
     if (state.busyOp !== null) return false
     state.busyOp = `evaluate:${jobID}`
@@ -330,6 +381,7 @@ export function createJobsStore() {
     reloadDetail,
     runJob,
     stop,
+    stopMany,
     evaluate,
     scale,
     restartAlloc,

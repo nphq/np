@@ -95,13 +95,13 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            platform: darwin/arm64
+            platform: darwin-arm64
           - os: macos-13
-            platform: darwin/amd64
+            platform: darwin-amd64
           - os: windows-latest
-            platform: windows/amd64
+            platform: windows-amd64
           - os: ubuntu-latest
-            platform: linux/amd64
+            platform: linux-amd64
     steps:
       - uses: actions/checkout@v5
 

@@ -3,6 +3,7 @@
   import { onDestroy, onMount } from 'svelte'
   import type * as Monaco from 'monaco-editor'
   import { ensureMonacoEnvironment } from '../../jobs/monacoEnv'
+  import { appearance } from '../../stores/appearance.svelte'
 
   let {
     value = $bindable(''),
@@ -26,6 +27,11 @@
   onDestroy(() => {
     editor?.dispose()
     editor = undefined
+  })
+
+  $effect(() => {
+    const th = appearance.resolved === 'light' ? 'vs' : 'vs-dark'
+    monaco?.editor.setTheme(th)
   })
 
   async function init(): Promise<void> {
@@ -57,7 +63,7 @@
     editor = m.editor.create(host, {
       value,
       language: language === 'json' ? 'json' : 'hcl',
-      theme: 'vs-dark',
+      theme: appearance.resolved === 'light' ? 'vs' : 'vs-dark',
       automaticLayout: true,
       minimap: { enabled: false },
       fontSize: 12,

@@ -282,8 +282,10 @@
           <JobsScreen
             jobs={jobs.list}
             loading={jobs.state.loading}
+            busy={jobs.state.busyOp !== null}
             onRefresh={() => void jobs.refresh(active.info.id)}
             onSelect={(jobID) => ui.navigate('job-detail', { jobID })}
+            onDeleteMany={(ids) => jobs.stopMany(active.info.id, ids, true)}
           />
         {:else if ui.route.page === 'job-detail'}
           <JobDetailScreen

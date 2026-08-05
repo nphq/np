@@ -115,10 +115,10 @@ export function buildDockerJobJSON(form: DockerJobForm): string {
     Count: Math.max(1, Math.floor(form.count) || 1),
     Tasks: [taskObj],
   }
-  if (usePort) {
+  if (usePort && form.portTo != null) {
     groupObj.Networks = [
       {
-        DynamicPorts: [{ Label: portLabel, To: Math.floor(form.portTo!) }],
+        DynamicPorts: [{ Label: portLabel, To: Math.floor(form.portTo) }],
       },
     ]
   }

@@ -78,7 +78,23 @@
 
     {#if confirmPhrase}
       <label class="mt-3 block text-[11px] text-zinc-500">
-        {t('confirm.typeToConfirm', { phrase: confirmPhrase })}
+        <span class="flex flex-wrap items-center gap-2">
+          <span>{t('confirm.typeToConfirm', { phrase: confirmPhrase })}</span>
+          {#if confirmPhrase === 'DELETE'}
+            <button
+              type="button"
+              class="rounded border border-zinc-600 bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200 hover:border-sky-500 hover:bg-zinc-700 hover:text-white disabled:opacity-50"
+              disabled={busy || typed.trim() === confirmPhrase}
+              title={t('confirm.fillPhrase', { phrase: confirmPhrase })}
+              onclick={(e) => {
+                e.preventDefault()
+                typed = confirmPhrase
+              }}
+            >
+              {confirmPhrase}
+            </button>
+          {/if}
+        </span>
         <input
           class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 font-mono text-xs text-zinc-100 outline-none focus:border-red-500"
           bind:value={typed}

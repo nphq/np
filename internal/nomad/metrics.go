@@ -7,6 +7,9 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+// Nomad NodeResources.Disk.DiskMB / MemoryMB 以 MiB（1024²）计；HostStats 字节字段按此换算。
+const bytesPerMiB = 1024 * 1024
+
 // nowMillis 是采样时间戳（ms epoch）。
 func nowMillis() int64 { return time.Now().UnixMilli() }
 
@@ -47,7 +50,7 @@ func FetchNodeStats(client *api.Client, nodeID string) (*NodeStats, error) {
 	}
 	ns := &NodeStats{Time: nowMillis()}
 	if hs.Memory != nil {
-		ns.MemoryUsedMB = float64(hs.Memory.Used) / 1e6
+		ns.MemoryUsedMB = float64(hs.Memory.Used) / bytesPerMiB
 	}
 	for _, c := range hs.CPU {
 		ns.CPUPercent += 100 - c.Idle
@@ -55,10 +58,42 @@ func FetchNodeStats(client *api.Client, nodeID string) (*NodeStats, error) {
 	if n := len(hs.CPU); n > 0 {
 		ns.CPUPercent /= float64(n)
 	}
-	for _, d := range hs.DiskStats {
-		ns.DiskUsedMB += float64(d.Used) / 1e6
-	}
+	ns.DiskUsedMB = diskUsedMiB(hs)
 	return ns, nil
+}
+
+// diskUsedMiB 选取与 NodeResources.Disk 对齐的已用磁盘（MiB）。
+//
+// 不可对 DiskStats 简单求和：macOS APFS 等会把同一物理卷的多个挂载点
+// （/, /System/Volumes/Data, …）各自报一份相同 Size/Used，求和会飙到数百%。
+// Nomad UI / CLI 使用 AllocDirStats（alloc 数据目录所在文件系统）。
+func diskUsedMiB(hs *api.HostStats) float64 {
+	if hs == nil {
+		return 0
+	}
+	if hs.AllocDirStats != nil && (hs.AllocDirStats.Size > 0 || hs.AllocDirStats.Used > 0) {
+		return float64(hs.AllocDirStats.Used) / bytesPerMiB
+	}
+	return diskUsedMiBFromMounts(hs.DiskStats)
+}
+
+func diskUsedMiBFromMounts(stats []*api.HostDiskStats) float64 {
+	var best *api.HostDiskStats
+	for _, d := range stats {
+		if d == nil || d.Size == 0 {
+			continue
+		}
+		if d.Mountpoint == "/" {
+			return float64(d.Used) / bytesPerMiB
+		}
+		if best == nil || d.Size > best.Size {
+			best = d
+		}
+	}
+	if best == nil {
+		return 0
+	}
+	return float64(best.Used) / bytesPerMiB
 }
 
 // FetchAllocStats 拉取 allocation 实时用量（每 alloc 1 调用，A2 源）。
@@ -81,7 +116,7 @@ func FetchAllocStats(client *api.Client, allocID string) (*AllocStats, error) {
 			ts.CPUPercent = c.Percent
 		}
 		if m := t.ResourceUsage.MemoryStats; m != nil {
-			ts.MemoryUsedMB = float64(m.RSS) / 1e6
+			ts.MemoryUsedMB = float64(m.RSS) / bytesPerMiB
 		}
 		as.Tasks[name] = ts
 	}

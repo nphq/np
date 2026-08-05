@@ -1,13 +1,9 @@
 @import 'tailwindcss';
 
 /*
- * Tokyo Night 主题（默认）。
+ * Tokyo Night 主题（默认深色）。
  * 直接覆盖 Tailwind 的 zinc/sky/amber/emerald/red 色阶，全应用零改动换肤。
- * 语义映射：
- *   zinc-950  = 应用背景（bg_dark）   zinc-900 = 面板（bg）        zinc-800 = 边框/悬浮（bg_highlight）
- *   zinc-700  = 强边框               zinc-600/500 = 弱文字/注释   zinc-400/300/200/100 = 文字阶梯
- *   sky       = blue/cyan（CPU/蓝）  amber = yellow/orange（内存/黄）
- *   emerald   = green（健康/绿）      red = red（危险/红）
+ * 浅色：html[data-theme="light"] 翻转 zinc 阶梯并加深强调色。
  */
 @theme {
   --color-zinc-950: #16161e;
@@ -42,8 +38,60 @@
   --color-red-950: #2a1620;
 }
 
-:root {
+:root,
+html[data-theme='dark'] {
   color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+
+  --color-zinc-950: #f0f1f5;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e4e6ee;
+  --color-zinc-700: #c9cdd9;
+  --color-zinc-600: #8b92a8;
+  --color-zinc-500: #6b7289;
+  --color-zinc-400: #4b5568;
+  --color-zinc-300: #374151;
+  --color-zinc-200: #1f2937;
+  --color-zinc-100: #111827;
+  --color-zinc-50: #030712;
+
+  --color-sky-500: #2563eb;
+  --color-sky-400: #1d4ed8;
+  --color-sky-300: #1e40af;
+
+  --color-amber-500: #d97706;
+  --color-amber-400: #b45309;
+  --color-amber-300: #92400e;
+
+  --color-emerald-500: #059669;
+  --color-emerald-400: #047857;
+  --color-emerald-300: #065f46;
+
+  --color-red-600: #dc2626;
+  --color-red-500: #ef4444;
+  --color-red-400: #f87171;
+  --color-red-300: #b91c1c;
+  --color-red-800: #991b1b;
+  --color-red-950: #fef2f2;
+}
+
+html {
+  font-size: 16px;
+}
+
+html[data-font-size='sm'] {
+  font-size: 14px;
+}
+
+html[data-font-size='md'] {
+  font-size: 16px;
+}
+
+html[data-font-size='lg'] {
+  font-size: 18px;
 }
 
 html,
@@ -51,6 +99,10 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+}
+
+html[data-font-family='system'],
+html:not([data-font-family]) {
   font-family:
     'SF Pro Text',
     -apple-system,
@@ -62,6 +114,18 @@ body {
     'Microsoft YaHei',
     'Noto Sans CJK SC',
     sans-serif;
+}
+
+html[data-font-family='sans'] {
+  font-family:
+    'IBM Plex Sans', 'Source Sans 3', ui-sans-serif, system-ui, 'PingFang SC', 'Microsoft YaHei',
+    'Noto Sans SC', sans-serif;
+}
+
+html[data-font-family='mono'] {
+  font-family:
+    'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, Consolas, 'Noto Sans Mono',
+    'Microsoft YaHei Mono', monospace;
 }
 
 #app {

@@ -34,7 +34,8 @@
     try {
       if (tab === 'events') {
         events = await onLoadEvents(alloc.id)
-        if (!task && events.length > 0) task = events[0]!.task
+        const first = events[0]
+        if (!task && first) task = first.task
       } else {
         const res = await onLoadLogs(alloc.id, task, tab)
         logs = res

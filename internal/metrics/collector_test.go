@@ -44,7 +44,7 @@ func (m *mockNomad) srv() *httptest.Server {
 			write(&api.HostStats{
 				Memory:    &api.HostMemoryStats{Total: 8 << 30, Used: m.hostMemUsed, Available: (8 << 30) - m.hostMemUsed},
 				CPU:       []*api.HostCPUStats{{CPU: "cpu0", User: 25, System: 25, Idle: m.hostCPU}},
-				DiskStats: []*api.HostDiskStats{{Device: "sda", Used: 50 << 20, Size: 100 << 20}},
+				DiskStats: []*api.HostDiskStats{{Device: "sda", Mountpoint: "/", Used: 50 << 20, Size: 100 << 20}},
 			})
 		case len(r.URL.Path) > len("/v1/client/allocation/") && r.URL.Path[:len("/v1/client/allocation/")] == "/v1/client/allocation/" &&
 			strings.HasSuffix(r.URL.Path, "/stats"):
@@ -54,7 +54,7 @@ func (m *mockNomad) srv() *httptest.Server {
 					"web": {
 						Timestamp: time.Now().UnixMilli(),
 						ResourceUsage: &api.ResourceUsage{
-							MemoryStats: &api.MemoryStats{RSS: 256_000_000}, // 256 MB（decimal）
+							MemoryStats: &api.MemoryStats{RSS: 256 << 20}, // 256 MiB
 							CpuStats:    &api.CpuStats{Percent: m.allocCPU},
 						},
 					},
