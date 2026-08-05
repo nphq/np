@@ -3,7 +3,7 @@ import type { MessageKey } from '../i18n/dictionaries/zh'
 
 export type JobType = 'service' | 'batch' | 'system'
 
-export type AppCategory = 'web' | 'data' | 'observability' | 'messaging' | 'utility'
+export type AppCategory = 'web' | 'data' | 'observability' | 'messaging' | 'utility' | 'native'
 
 export interface DockerJobForm {
   jobID: string
@@ -30,11 +30,13 @@ export interface CatalogApp {
   titleKey: MessageKey
   descKey: MessageKey
   category: AppCategory
-  /** 列表上展示的镜像标签 */
+  /** 列表徽章：镜像名，或 `exec` / `raw_exec` 等驱动提示 */
   imageLabel: string
   kind: 'form' | 'hcl'
   form?: DockerJobForm
   hcl?: string
+  /** 任务驱动；缺省 form=docker，hcl 可显式标注 */
+  driver?: 'docker' | 'exec' | 'raw_exec' | 'java'
 }
 
 /** @deprecated 用 CatalogApp；保留别名避免旧引用断裂 */
@@ -200,6 +202,76 @@ export const STARTER_HCL = `job "example" {
 }
 `
 
+/** 非容器：exec（隔离较好；二进制需在节点上或通过 artifact 拉取）。 */
+export const STARTER_EXEC_HCL = `job "native-http" {
+  datacenters = ["*"]
+  type = "service"
+
+  group "app" {
+    count = 1
+
+    network {
+      port "http" {}
+    }
+
+    task "server" {
+      # 节点上须已有可执行文件（或配合 artifact 下载）
+      driver = "exec"
+
+      config {
+        command = "/usr/bin/python3"
+        args    = ["-m", "http.server", "\${NOMAD_PORT_http}"]
+      }
+
+      resources {
+        cpu    = 100
+        memory = 64
+      }
+    }
+  }
+}
+`
+
+/** 非容器：raw_exec（几乎无隔离；client 须显式启用 plugin）。 */
+export const STARTER_RAW_EXEC_HCL = `job "host-sleep" {
+  datacenters = ["*"]
+  type = "batch"
+
+  group "batch" {
+    count = 1
+
+    task "sleep" {
+      # 需要在 Nomad client 配置中启用：
+      # plugin "raw_exec" { config { enabled = true } }
+      driver = "raw_exec"
+
+      config {
+        command = "/bin/sleep"
+        args    = ["30"]
+      }
+
+      resources {
+        cpu    = 50
+        memory = 32
+      }
+    }
+  }
+}
+`
+
+export type SpecStarterID = 'docker' | 'exec' | 'raw_exec'
+
+export function starterHCL(id: SpecStarterID): string {
+  switch (id) {
+    case 'exec':
+      return STARTER_EXEC_HCL
+    case 'raw_exec':
+      return STARTER_RAW_EXEC_HCL
+    default:
+      return STARTER_HCL
+  }
+}
+
 /** 精选常用应用（本地固化，非远程商店）。 */
 export const APP_CATALOG: CatalogApp[] = [
   {
@@ -362,6 +434,70 @@ export const APP_CATALOG: CatalogApp[] = [
     },
   },
   {
+    id: 'vector',
+    titleKey: 'apps.vector.title',
+    descKey: 'apps.vector.desc',
+    category: 'observability',
+    imageLabel: 'timberio/vector:0.42.0-alpine',
+    kind: 'hcl',
+    driver: 'docker',
+    hcl: `job "vector" {
+  datacenters = ["*"]
+  type = "service"
+
+  group "vector" {
+    count = 1
+
+    network {
+      port "api" {
+        to = 8686
+      }
+    }
+
+    task "vector" {
+      driver = "docker"
+
+      config {
+        image = "timberio/vector:0.42.0-alpine"
+        ports = ["api"]
+        args  = ["--config", "/local/vector.yaml"]
+      }
+
+      # 演示管线：demo_logs → console；自定义时改 template 即可接真实 source/sink
+      template {
+        data        = <<-EOH
+          api:
+            enabled: true
+            address: "0.0.0.0:8686"
+
+          sources:
+            demo:
+              type: demo_logs
+              format: json
+              interval: 1
+
+          sinks:
+            console:
+              type: console
+              inputs:
+                - demo
+              encoding:
+                codec: json
+        EOH
+        destination = "local/vector.yaml"
+        change_mode = "restart"
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+  }
+}
+`,
+  },
+  {
     id: 'batch-hello',
     titleKey: 'apps.batchHello.title',
     descKey: 'apps.batchHello.desc',
@@ -413,6 +549,26 @@ export const APP_CATALOG: CatalogApp[] = [
       command: 'sleep',
       argsText: '3600',
     },
+  },
+  {
+    id: 'native-python-http',
+    titleKey: 'apps.nativeHttp.title',
+    descKey: 'apps.nativeHttp.desc',
+    category: 'native',
+    imageLabel: 'exec · python3 -m http.server',
+    kind: 'hcl',
+    driver: 'exec',
+    hcl: STARTER_EXEC_HCL,
+  },
+  {
+    id: 'native-host-sleep',
+    titleKey: 'apps.nativeSleep.title',
+    descKey: 'apps.nativeSleep.desc',
+    category: 'native',
+    imageLabel: 'raw_exec · /bin/sleep',
+    kind: 'hcl',
+    driver: 'raw_exec',
+    hcl: STARTER_RAW_EXEC_HCL,
   },
 ]
 

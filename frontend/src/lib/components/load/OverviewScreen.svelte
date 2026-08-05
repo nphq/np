@@ -9,13 +9,13 @@
     load,
     busy,
     onRefresh,
-    onSelectAlloc,
+    onSelectJob,
   }: {
     clusterName: string
     load: nomad.ClusterLoad | null
     busy: boolean
     onRefresh: () => void
-    onSelectAlloc?: (allocID: string) => void
+    onSelectJob?: (jobID: string) => void
   } = $props()
 </script>
 
@@ -40,7 +40,7 @@
     </div>
   {:else}
     <div class="mt-6">
-      <ClusterOverview {load} {onSelectAlloc} />
+      <ClusterOverview {load} {onSelectJob} />
     </div>
   {/if}
 </div>

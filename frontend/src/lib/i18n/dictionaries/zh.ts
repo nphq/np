@@ -42,7 +42,7 @@ const zh = {
 
   // 精选应用目录
   'apps.title': '应用',
-  'apps.subtitle': '精选常用工作负载，一键部署或自定义后提交',
+  'apps.subtitle': '容器与原生工作负载：一键部署或自定义后提交',
   'apps.search': '搜索应用…',
   'apps.empty': '没有匹配的应用',
   'apps.selectHint': '选择左侧应用查看详情',
@@ -52,19 +52,25 @@ const zh = {
   'apps.confirmTitle': '部署此应用？',
   'apps.confirmBody':
     '{name}\n任务 {jobID} · 镜像 {image} · 副本 {count}\n\n将执行 解析 → 校验 → 注册。',
+  'apps.confirmBodyHcl':
+    '{name}\n任务 {jobID} · 驱动 {driver}\n\n将执行 解析 → 校验 → 注册。原生任务依赖节点上的二进制与 client 插件配置。',
   'apps.confirmOverwrite':
     '⚠ 集群中已存在同名任务 “{jobID}”。确认后将更新该任务（Nomad Register），不是新建。',
   'apps.detail.image': '镜像',
+  'apps.detail.runtime': '运行时',
   'apps.detail.jobID': '默认任务 ID',
   'apps.detail.type': '类型',
   'apps.detail.resources': '资源',
   'apps.detail.hint': '部署使用推荐默认值；自定义可在运行任务页调整表单或规格。',
+  'apps.detail.hintNative':
+    '非容器任务：请先确认目标节点已安装所需二进制，且 client 已启用对应驱动（raw_exec 默认关闭）。建议先「自定义」核对 HCL 再提交。',
   'apps.cat.all': '全部',
   'apps.cat.web': 'Web',
   'apps.cat.data': '数据',
   'apps.cat.observability': '可观测',
   'apps.cat.messaging': '消息',
   'apps.cat.utility': '工具',
+  'apps.cat.native': '原生',
   'apps.nginx.title': 'Nginx',
   'apps.nginx.desc': '反向代理 / 静态站点，动态端口映射到 80。',
   'apps.traefik.title': 'Traefik',
@@ -81,10 +87,19 @@ const zh = {
   'apps.prometheus.desc': '指标采集，默认 UI 端口 9090。',
   'apps.grafana.title': 'Grafana',
   'apps.grafana.desc': '可视化面板，默认管理员密码请尽快修改。',
+  'apps.vector.title': 'Vector',
+  'apps.vector.desc':
+    '日志与可观测数据管道（timberio/vector）。样例为 demo_logs → console，API 端口 8686；自定义请改 template 中的配置。',
   'apps.batchHello.title': 'Batch Hello',
   'apps.batchHello.desc': 'busybox 一次性 batch，适合验证 batch 调度。',
   'apps.alpineSleep.title': 'Alpine Sleep',
   'apps.alpineSleep.desc': 'alpine sleep 3600，占位型 batch 任务。',
+  'apps.nativeHttp.title': 'Python HTTP（exec）',
+  'apps.nativeHttp.desc':
+    '非容器示例：exec 驱动运行 python3 -m http.server。节点须有 python3；也可用 artifact 拉取二进制。',
+  'apps.nativeSleep.title': 'Host Sleep（raw_exec）',
+  'apps.nativeSleep.desc':
+    '非容器 batch：raw_exec 调用 /bin/sleep。client 须 plugin "raw_exec" { config { enabled = true } }。',
 
   // 设置（对标 Lens Preferences）
   'settings.navTitle': '偏好设置',
@@ -275,7 +290,7 @@ const zh = {
 
   // 运行任务
   'runJob.title': '运行任务',
-  'runJob.subtitle': '用表单快速创建，或从应用目录自定义后提交',
+  'runJob.subtitle': 'Docker 快速创建，或用高级 HCL 部署 exec / raw_exec 等非容器任务',
   'runJob.namespace': '命名空间',
   'runJob.namespacePlaceholder': 'default',
   'runJob.canonicalize': '规范化',
@@ -283,7 +298,7 @@ const zh = {
   'runJob.running': '提交中…',
   'runJob.validationFailed': '校验失败',
   'runJob.warnings': '警告',
-  'runJob.hint': 'HCL 将在服务端解析并规范化后校验。',
+  'runJob.hint': 'HCL 将在服务端解析并规范化后校验。非容器请用下方起步模板（exec / raw_exec）。',
   'runJob.hintJson': 'JSON 字段遵循 Nomad API Job 规范（如 "ID"、"TaskGroups"）。',
   'runJob.placeholderHcl': 'job "example" { … }',
   'runJob.placeholderJson': '{ "ID": "example", … }',
@@ -291,7 +306,17 @@ const zh = {
   'runJob.formatJson': '格式化 JSON',
   'runJob.tab.form': '快速创建',
   'runJob.tab.advanced': '高级编辑',
-  'runJob.form.hint': '填写 Docker 任务字段，将自动生成 Nomad JSON 规格并提交。',
+  'runJob.form.hint':
+    '此表单仅生成 Docker 任务。非容器（exec / raw_exec / java 等）请切换到「高级编辑」或应用目录「原生」。',
+  'runJob.starter.label': '起步模板',
+  'runJob.starter.docker': 'Docker',
+  'runJob.starter.exec': 'exec',
+  'runJob.starter.raw_exec': 'raw_exec',
+  'runJob.starter.hint':
+    'exec：隔离较好，二进制须在节点上或经 artifact 拉取。raw_exec：几乎无隔离，须在 client 显式启用。',
+  'runJob.starter.replaceTitle': '替换当前规格？',
+  'runJob.starter.replaceBody': '编辑器内容将被所选起步模板覆盖，此操作不可撤销。',
+  'runJob.starter.replaceConfirm': '覆盖',
   'runJob.form.jobID': '任务 ID',
   'runJob.form.type': '类型',
   'runJob.form.datacenters': '数据中心',

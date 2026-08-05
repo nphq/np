@@ -7,10 +7,10 @@
 
   let {
     load,
-    onSelectAlloc,
+    onSelectJob,
   }: {
     load: nomad.ClusterLoad
-    onSelectAlloc?: (allocID: string) => void
+    onSelectJob?: (jobID: string) => void
   } = $props()
 
   interface Donut {
@@ -137,10 +137,13 @@
         {#each load.topConsumers as c (c.allocID)}
           <li>
             <button
-              class="flex w-full items-center justify-between py-1.5 text-left hover:bg-zinc-800/40 {onSelectAlloc
+              class="flex w-full items-center justify-between py-1.5 text-left hover:bg-zinc-800/40 {onSelectJob
                 ? 'cursor-pointer'
                 : ''}"
-              onclick={() => onSelectAlloc?.(c.allocID)}
+              onclick={() => {
+                const jobID = c.jobID?.trim()
+                if (jobID) onSelectJob?.(jobID)
+              }}
             >
               <div class="min-w-0">
                 <div class="truncate font-mono text-xs text-zinc-300">{c.jobID}</div>

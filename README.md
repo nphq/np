@@ -11,6 +11,7 @@ Built with **Wails v3 + Go + Svelte 5 + TypeScript**, designed to be fast, keybo
 - **Nodes** — capacity / allocated / used bars per node with 60-point sparkline history, plus per-node detail with its allocations.
 - **Jobs** — list with status badges (running / queued / failed), detail view with task groups and allocations.
 - **Job operations** — run (HCL/JSON spec with Parse → Validate → Register pipeline), stop (with optional purge), scale task groups, force evaluate, restart / stop allocations. All write actions require confirmation.
+- **Container & native workloads** — Quick create builds Docker jobs; Advanced HCL starters and Apps → Native cover `exec` / `raw_exec` (see below).
 - **Live updates** — metrics stream in via events (`load.patch`), not full reloads.
 - **i18n** — Simplified Chinese and English UI, switchable in the title bar (defaults to Chinese).
 
@@ -49,6 +50,32 @@ docker compose up -d
 ```
 
 Then open the app, click **Add Cluster**, and point it at `http://127.0.0.1:4646`.
+
+## Deploying non-container (native) jobs
+
+Nomad can run binaries on the host without Docker. In this app:
+
+| Path | What it does |
+| --- | --- |
+| **Apps → Native** | Curated `exec` / `raw_exec` samples; Deploy or Customize |
+| **Run Job → Advanced** | Starter chips: Docker, `exec`, `raw_exec` |
+
+**Prerequisites**
+
+- **`exec`** — binary must exist on the client node (or use an `artifact` stanza to download it). Isolation is stronger than `raw_exec`.
+- **`raw_exec`** — almost no isolation; must be enabled on the Nomad client:
+
+```hcl
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}
+```
+
+`nomad agent -dev` typically enables common drivers for local experiments; production clients often leave `raw_exec` disabled. Point the job’s `command` at a path that exists on the scheduled nodes (e.g. `/usr/bin/python3`).
+
+For other drivers (`java`, `podman`, …), paste a full job HCL/JSON in **Advanced** — the panel submits whatever Nomad accepts.
 
 ## Testing
 

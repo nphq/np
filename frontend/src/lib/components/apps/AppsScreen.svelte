@@ -8,6 +8,7 @@
   import {
     APP_CATALOG,
     buildDockerJobJSON,
+    extractJobIDFromSpec,
     findCatalogApp,
     summarizeDockerForm,
     type AppCategory,
@@ -41,6 +42,7 @@
       | 'apps.cat.observability'
       | 'apps.cat.messaging'
       | 'apps.cat.utility'
+      | 'apps.cat.native'
   }[] = [
     { id: 'all', labelKey: 'apps.cat.all' },
     { id: 'web', labelKey: 'apps.cat.web' },
@@ -48,6 +50,7 @@
     { id: 'observability', labelKey: 'apps.cat.observability' },
     { id: 'messaging', labelKey: 'apps.cat.messaging' },
     { id: 'utility', labelKey: 'apps.cat.utility' },
+    { id: 'native', labelKey: 'apps.cat.native' },
   ]
 
   let query = $state('')
@@ -87,29 +90,53 @@
         return t('apps.cat.messaging')
       case 'utility':
         return t('apps.cat.utility')
+      case 'native':
+        return t('apps.cat.native')
     }
   }
 
+  function appJobID(app: CatalogApp): string {
+    if (app.kind === 'form' && app.form) return app.form.jobID.trim()
+    if (app.kind === 'hcl' && app.hcl) return extractJobIDFromSpec(app.hcl, 'hcl')
+    return ''
+  }
+
+  function canDeploy(app: CatalogApp): boolean {
+    return (app.kind === 'form' && !!app.form) || (app.kind === 'hcl' && !!app.hcl)
+  }
+
   function requestDeploy(): void {
-    if (!selected || selected.kind !== 'form' || !selected.form) return
+    if (!selected || !canDeploy(selected)) return
     errorText = ''
     warnings = ''
     confirmOpen = true
   }
 
   function willOverwrite(app: CatalogApp): boolean {
-    const id = app.form?.jobID?.trim()
+    const id = appJobID(app)
     return !!id && existingSet.has(id.toLowerCase())
   }
 
   async function doDeploy(): Promise<void> {
-    if (!selected?.form) return
-    const outcome = await onRun({
-      spec: buildDockerJobJSON(selected.form),
-      format: 'json',
-      namespace: '',
-      canonicalize: false,
-    })
+    if (!selected) return
+    let input: RunJobInput | null = null
+    if (selected.kind === 'form' && selected.form) {
+      input = {
+        spec: buildDockerJobJSON(selected.form),
+        format: 'json',
+        namespace: '',
+        canonicalize: false,
+      }
+    } else if (selected.kind === 'hcl' && selected.hcl) {
+      input = {
+        spec: selected.hcl,
+        format: 'hcl',
+        namespace: '',
+        canonicalize: false,
+      }
+    }
+    if (!input) return
+    const outcome = await onRun(input)
     confirmOpen = false
     if (outcome.err) {
       errorText = outcome.err.message
@@ -124,16 +151,25 @@
   }
 
   function confirmBody(app: CatalogApp): string {
-    if (!app.form) return ''
-    const s = summarizeDockerForm(app.form)
-    let body = t('apps.confirmBody', {
-      name: t(app.titleKey),
-      jobID: s.jobID,
-      image: s.image,
-      count: String(s.count),
-    })
+    const jobID = appJobID(app)
+    let body: string
+    if (app.kind === 'form' && app.form) {
+      const s = summarizeDockerForm(app.form)
+      body = t('apps.confirmBody', {
+        name: t(app.titleKey),
+        jobID: s.jobID,
+        image: s.image,
+        count: String(s.count),
+      })
+    } else {
+      body = t('apps.confirmBodyHcl', {
+        name: t(app.titleKey),
+        jobID: jobID || '—',
+        driver: app.driver ?? app.imageLabel,
+      })
+    }
     if (willOverwrite(app)) {
-      body += '\n\n' + t('apps.confirmOverwrite', { jobID: s.jobID })
+      body += '\n\n' + t('apps.confirmOverwrite', { jobID })
     }
     return body
   }
@@ -206,7 +242,13 @@
         <p class="text-xs leading-5 text-zinc-400">{t(selected.descKey)}</p>
         <dl class="mt-4 space-y-3 text-xs">
           <div>
-            <dt class="text-zinc-600">{t('apps.detail.image')}</dt>
+            <dt class="text-zinc-600">
+              {selected.category === 'native' ||
+              selected.driver === 'exec' ||
+              selected.driver === 'raw_exec'
+                ? t('apps.detail.runtime')
+                : t('apps.detail.image')}
+            </dt>
             <dd class="mt-0.5 font-mono text-zinc-300">{selected.imageLabel}</dd>
           </div>
           {#if selected.form}
@@ -224,6 +266,11 @@
                 {selected.form.cpu} MHz · {selected.form.memory} MB · ×{selected.form.count}
               </dd>
             </div>
+          {:else if selected.hcl}
+            <div>
+              <dt class="text-zinc-600">{t('apps.detail.jobID')}</dt>
+              <dd class="mt-0.5 text-zinc-300">{appJobID(selected) || '—'}</dd>
+            </div>
           {/if}
         </dl>
         {#if errorText}
@@ -236,10 +283,12 @@
             <FormBanner kind="warning" title={t('runJob.warnings')} message={warnings} />
           </div>
         {/if}
-        <p class="mt-4 text-[11px] text-zinc-600">{t('apps.detail.hint')}</p>
+        <p class="mt-4 text-[11px] text-zinc-600">
+          {selected.category === 'native' ? t('apps.detail.hintNative') : t('apps.detail.hint')}
+        </p>
       </div>
       <div class="flex shrink-0 flex-col gap-2 border-t border-zinc-800 p-4">
-        {#if selected.kind === 'form'}
+        {#if canDeploy(selected)}
           <button
             class="rounded bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
             disabled={busy}

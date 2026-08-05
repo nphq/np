@@ -259,10 +259,7 @@
             load={loads.state.cluster}
             busy={loads.state.loading}
             onRefresh={() => void loads.refresh(active.info.id)}
-            onSelectAlloc={(allocID) => {
-              const al = loads.state.allocs.get(allocID)
-              ui.navigate('job-detail', { jobID: al?.jobID ?? allocID })
-            }}
+            onSelectJob={(jobID) => ui.navigate('job-detail', { jobID })}
           />
         {:else if ui.route.page === 'nodes'}
           <NodesScreen

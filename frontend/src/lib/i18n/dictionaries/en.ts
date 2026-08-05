@@ -39,7 +39,7 @@ const en = {
   'nav.settings': 'Settings',
 
   'apps.title': 'Apps',
-  'apps.subtitle': 'Curated workloads — deploy with defaults or customize first',
+  'apps.subtitle': 'Container and native workloads — deploy defaults or customize first',
   'apps.search': 'Search apps…',
   'apps.empty': 'No matching apps',
   'apps.selectHint': 'Select an app to see details',
@@ -49,19 +49,25 @@ const en = {
   'apps.confirmTitle': 'Deploy this app?',
   'apps.confirmBody':
     '{name}\nJob {jobID} · Image {image} · Count {count}\n\nWill Parse → Validate → Register.',
+  'apps.confirmBodyHcl':
+    '{name}\nJob {jobID} · Driver {driver}\n\nWill Parse → Validate → Register. Native jobs need binaries on the node and the matching client plugins.',
   'apps.confirmOverwrite':
     '⚠ A job named “{jobID}” already exists. Confirming will update it (Nomad Register), not create a new one.',
   'apps.detail.image': 'Image',
+  'apps.detail.runtime': 'Runtime',
   'apps.detail.jobID': 'Default job ID',
   'apps.detail.type': 'Type',
   'apps.detail.resources': 'Resources',
   'apps.detail.hint': 'Deploy uses recommended defaults; Customize opens the Run Job editor.',
+  'apps.detail.hintNative':
+    'Non-container jobs: ensure target nodes have the binary and the client enables the driver (raw_exec is off by default). Prefer Customize to review HCL first.',
   'apps.cat.all': 'All',
   'apps.cat.web': 'Web',
   'apps.cat.data': 'Data',
   'apps.cat.observability': 'Observability',
   'apps.cat.messaging': 'Messaging',
   'apps.cat.utility': 'Utility',
+  'apps.cat.native': 'Native',
   'apps.nginx.title': 'Nginx',
   'apps.nginx.desc': 'Reverse proxy / static site, dynamic port → 80.',
   'apps.traefik.title': 'Traefik',
@@ -78,10 +84,19 @@ const en = {
   'apps.prometheus.desc': 'Metrics collection, UI on port 9090.',
   'apps.grafana.title': 'Grafana',
   'apps.grafana.desc': 'Dashboards — change the default admin password soon.',
+  'apps.vector.title': 'Vector',
+  'apps.vector.desc':
+    'Log & observability pipeline (timberio/vector). Sample: demo_logs → console, API on 8686; customize via the job template.',
   'apps.batchHello.title': 'Batch Hello',
   'apps.batchHello.desc': 'One-shot busybox batch to verify batch scheduling.',
   'apps.alpineSleep.title': 'Alpine Sleep',
   'apps.alpineSleep.desc': 'alpine sleep 3600 — placeholder batch job.',
+  'apps.nativeHttp.title': 'Python HTTP (exec)',
+  'apps.nativeHttp.desc':
+    'Non-container sample: exec runs python3 -m http.server. Nodes need python3; or fetch a binary via artifact.',
+  'apps.nativeSleep.title': 'Host Sleep (raw_exec)',
+  'apps.nativeSleep.desc':
+    'Non-container batch: raw_exec runs /bin/sleep. Client needs plugin "raw_exec" { config { enabled = true } }.',
 
   'settings.navTitle': 'Preferences',
   'settings.nav.application': 'Application',
@@ -267,7 +282,7 @@ const en = {
   'observe.truncated': 'truncated',
 
   'runJob.title': 'Run Job',
-  'runJob.subtitle': 'Create with a form, or customize from Apps',
+  'runJob.subtitle': 'Quick Docker create, or advanced HCL for exec / raw_exec native jobs',
   'runJob.namespace': 'namespace',
   'runJob.namespacePlaceholder': 'default',
   'runJob.canonicalize': 'canonicalize',
@@ -275,7 +290,8 @@ const en = {
   'runJob.running': 'Running…',
   'runJob.validationFailed': 'Validation failed',
   'runJob.warnings': 'Warnings',
-  'runJob.hint': 'HCL is parsed server-side and canonicalized before validation.',
+  'runJob.hint':
+    'HCL is parsed server-side before validation. For non-container jobs use the starter templates (exec / raw_exec).',
   'runJob.hintJson': 'JSON fields follow the Nomad API Job schema (e.g. "ID", "TaskGroups").',
   'runJob.placeholderHcl': 'job "example" { … }',
   'runJob.placeholderJson': '{ "ID": "example", … }',
@@ -283,7 +299,18 @@ const en = {
   'runJob.formatJson': 'Format JSON',
   'runJob.tab.form': 'Quick create',
   'runJob.tab.advanced': 'Advanced',
-  'runJob.form.hint': 'Fill Docker job fields; we generate Nomad JSON and submit it.',
+  'runJob.form.hint':
+    'This form builds Docker jobs only. For exec / raw_exec / java, use Advanced or Apps → Native.',
+  'runJob.starter.label': 'Starters',
+  'runJob.starter.docker': 'Docker',
+  'runJob.starter.exec': 'exec',
+  'runJob.starter.raw_exec': 'raw_exec',
+  'runJob.starter.hint':
+    'exec: better isolation; binary on the node or via artifact. raw_exec: little isolation; enable explicitly on the client.',
+  'runJob.starter.replaceTitle': 'Replace current spec?',
+  'runJob.starter.replaceBody':
+    'Editor contents will be replaced by the selected starter. This cannot be undone.',
+  'runJob.starter.replaceConfirm': 'Replace',
   'runJob.form.jobID': 'Job ID',
   'runJob.form.type': 'Type',
   'runJob.form.datacenters': 'Datacenters',

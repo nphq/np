@@ -13,9 +13,11 @@
     defaultDockerForm,
     extractJobIDFromSpec,
     findCatalogApp,
+    starterHCL,
     summarizeDockerForm,
     tryFormatJSON,
     type DockerJobForm,
+    type SpecStarterID,
   } from '../../jobs/spec'
   import {
     issuesList,
@@ -54,9 +56,12 @@
   let formIssues = $state<DockerFormIssues>({})
   let confirmOpen = $state(false)
   let formatConfirm = $state<'hcl' | null>(null)
+  let starterConfirm = $state<SpecStarterID | null>(null)
   let pending = $state<RunJobInput | null>(null)
   let appliedPreset = $state<string | null>(null)
+  let activeStarter = $state<SpecStarterID>('docker')
 
+  const starters: SpecStarterID[] = ['docker', 'exec', 'raw_exec']
   const formSummary = $derived(summarizeDockerForm(form))
   const existingSet = $derived(new Set(existingJobIDs.map((id) => id.toLowerCase())))
 
@@ -78,6 +83,9 @@
       spec = app.hcl
       format = 'hcl'
       tab = 'advanced'
+      if (app.driver === 'exec') activeStarter = 'exec'
+      else if (app.driver === 'raw_exec') activeStarter = 'raw_exec'
+      else activeStarter = 'docker'
     }
   })
 
@@ -86,6 +94,7 @@
     if (tab === 'form' && next === 'advanced') {
       spec = buildDockerJobJSON(form)
       format = 'json'
+      activeStarter = 'docker'
     }
     errorText = ''
     warnings = ''
@@ -106,15 +115,35 @@
   }
 
   function applyFormat(next: 'hcl' | 'json'): void {
-    if (next === 'json' && format === 'hcl' && spec.trim() === STARTER_HCL.trim()) {
+    if (next === 'json' && format === 'hcl' && spec.trim() === starterHCL(activeStarter).trim()) {
       spec = buildDockerJobJSON(defaultDockerForm())
+      activeStarter = 'docker'
     } else if (next === 'hcl' && format === 'json') {
-      spec = STARTER_HCL
+      spec = starterHCL(activeStarter === 'docker' ? 'docker' : activeStarter)
     }
     errorText = ''
     warnings = ''
     format = next
     formatConfirm = null
+  }
+
+  function requestStarter(id: SpecStarterID): void {
+    if (format !== 'hcl') return
+    if (id === activeStarter && spec.trim() === starterHCL(id).trim()) return
+    if (spec.trim() !== '' && spec.trim() !== starterHCL(activeStarter).trim()) {
+      starterConfirm = id
+      return
+    }
+    applyStarter(id)
+  }
+
+  function applyStarter(id: SpecStarterID): void {
+    spec = starterHCL(id)
+    activeStarter = id
+    format = 'hcl'
+    errorText = ''
+    warnings = ''
+    starterConfirm = null
   }
 
   function formatSpec(): void {
@@ -325,6 +354,29 @@
       </div>
       <JobDockerForm bind:form issues={formIssues} />
     {:else}
+      {#if format === 'hcl'}
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <span class="text-[11px] text-zinc-500">{t('runJob.starter.label')}</span>
+          {#each starters as s (s)}
+            <button
+              class="rounded px-2.5 py-1 text-[11px] {activeStarter === s &&
+              spec.trim() === starterHCL(s).trim()
+                ? 'bg-zinc-100 font-medium text-zinc-900'
+                : 'border border-zinc-700 text-zinc-400 hover:bg-zinc-800'}"
+              onclick={() => requestStarter(s)}
+            >
+              {t(
+                s === 'docker'
+                  ? 'runJob.starter.docker'
+                  : s === 'exec'
+                    ? 'runJob.starter.exec'
+                    : 'runJob.starter.raw_exec',
+              )}
+            </button>
+          {/each}
+        </div>
+        <p class="mb-3 text-[11px] leading-5 text-zinc-600">{t('runJob.starter.hint')}</p>
+      {/if}
       <JobSpecEditor
         bind:value={spec}
         language={format}
@@ -361,5 +413,19 @@
     danger
     onConfirm={() => applyFormat('hcl')}
     onCancel={() => (formatConfirm = null)}
+  />
+{/if}
+
+{#if starterConfirm}
+  <ConfirmDialog
+    title={t('runJob.starter.replaceTitle')}
+    message={t('runJob.starter.replaceBody')}
+    confirmLabel={t('runJob.starter.replaceConfirm')}
+    danger
+    onConfirm={() => {
+      const id = starterConfirm
+      if (id) applyStarter(id)
+    }}
+    onCancel={() => (starterConfirm = null)}
   />
 {/if}

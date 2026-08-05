@@ -11,6 +11,7 @@
 - **节点** — 每节点容量 / 已分配 / 实时用量进度条 + 60 点历史曲线；节点详情页展示其下的所有 Allocation
 - **Job** — 列表（运行 / 排队 / 失败状态徽标）+ 详情（Task Group 与 Allocation 层级展开）
 - **Job 操作** — 部署（HCL/JSON -> Parse -> Validate -> Register 流水线）、停止（可选 purge）、扩缩容 Task Group、强制评估、重启 / 停止 Allocation；所有写操作均需二次确认
+- **容器与非容器** — 「快速创建」面向 Docker；「高级编辑」起步模板与「应用 → 原生」覆盖 `exec` / `raw_exec`（见下文）
 - **实时推送** — 负载通过 Nomad Event Stream 增量推送（`load.patch`），非轮询重刷
 - **国际化** — 简体中文 / English 标题栏一键切换（默认中文）
 
@@ -49,6 +50,32 @@ docker compose up -d
 ```
 
 启动应用后点击 **添加集群**，填入 `http://127.0.0.1:4646` 即可连接。
+
+## 部署非容器（原生）应用
+
+Nomad 可直接在宿主机上跑二进制，不必依赖 Docker。本应用中的入口：
+
+| 路径 | 作用 |
+| --- | --- |
+| **应用 → 原生** | 精选 `exec` / `raw_exec` 样例；可一键部署或自定义 |
+| **运行任务 → 高级编辑** | 起步模板：Docker、`exec`、`raw_exec` |
+
+**前提条件**
+
+- **`exec`** — 目标节点上须已有可执行文件（或用 `artifact` 拉取）。隔离性好于 `raw_exec`。
+- **`raw_exec`** — 几乎无隔离；须在 Nomad client 配置中显式启用：
+
+```hcl
+plugin "raw_exec" {
+  config {
+    enabled = true
+  }
+}
+```
+
+`nomad agent -dev` 本地开发通常已启用常用驱动；生产环境常见做法是关闭 `raw_exec`。请将 job 的 `command` 指向调度节点上真实存在的路径（例如 `/usr/bin/python3`）。
+
+其他驱动（`java`、`podman` 等）可在「高级编辑」中粘贴完整 HCL/JSON——面板会提交 Nomad 能接受的任意规格。
 
 ## 测试
 
