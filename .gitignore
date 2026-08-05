@@ -4,6 +4,14 @@ build/bin
 build/darwin/*.app
 build/darwin/*.dmg
 build/windows/*.exe
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+build/windows/nsis/*-installer.exe
+build/linux/*.desktop
+build/linux/appimage/build/
+build/linux/appimage/np
+build/linux/appimage/appicon.png
+*.syso
+wails_windows_*.syso
 
 # Go test / profiling / coverage
 *.test

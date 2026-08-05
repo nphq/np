@@ -30,8 +30,14 @@ cd frontend && bun install && cd ..
 # 2. 开发模式启动（Vite HMR，端口 9245）
 wails3 dev
 
-# 3. 构建产物
-wails3 build        # 输出 bin/nomad-manager
+# 3. 当前系统生产构建
+wails3 build        # 输出 bin/np（Windows 为 bin/np.exe）
+
+# 可选：打包安装包（需各平台工具）
+wails3 package                    # 当前 OS 默认打包
+wails3 task windows:package       # NSIS 安装包（需 makensis）
+wails3 task linux:create:deb      # .deb
+wails3 task linux:create:appimage # AppImage
 ```
 
 本地调试可启动 dev agent：
@@ -78,7 +84,7 @@ cd frontend && bun run lint  # eslint
 
 ## 项目状态
 
-里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job 只读界面、指标流水线、Job 管理操作）。日志查看器（M3）与打包上线（M4/M5）为后续规划。当前依赖 **Wails v3.0.0-beta.3**。
+里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job、指标流水线、Job 管理、部署观测）。Darwin / Windows / Linux 构建与打包已通过 Wails Taskfile 支持（`wails3 build` / `wails3 package`）。当前依赖 **Wails v3.0.0-beta.3**。
 
 ## 贡献
 

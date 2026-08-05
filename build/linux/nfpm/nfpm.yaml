@@ -1,0 +1,39 @@
+# nfpm config for Nomad Panel (np). Docs: https://nfpm.goreleaser.com
+name: "np"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.1.0"
+section: "utils"
+priority: "optional"
+maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+description: "Nomad cluster manager desktop app"
+vendor: "Sphinx"
+homepage: "https://github.com/nphq/np"
+license: "Apache-2.0"
+release: "1"
+
+contents:
+  - src: "./bin/np"
+    dst: "/usr/local/bin/np"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/np.png"
+  - src: "./build/linux/np.desktop"
+    dst: "/usr/share/applications/np.desktop"
+
+# GTK4 + WebKitGTK 6.0 (Wails v3 default; Ubuntu 24.04+ / Debian 13+)
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+
+overrides:
+  rpm:
+    depends:
+      - gtk4
+      - webkitgtk6.0
+  archlinux:
+    depends:
+      - gtk4
+      - webkitgtk-6.0
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

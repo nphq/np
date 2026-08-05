@@ -30,8 +30,14 @@ cd frontend && bun install && cd ..
 # 2. Run in dev mode (Vite HMR on port 9245)
 wails3 dev
 
-# 3. Build a production binary
-wails3 build        # outputs bin/nomad-manager
+# 3. Build a production binary for the current OS
+wails3 build        # outputs bin/np (or bin/np.exe on Windows)
+
+# Optional: package installers (platform-specific tooling required)
+wails3 package                    # current OS default package
+wails3 task windows:package       # NSIS installer (needs makensis)
+wails3 task linux:create:deb      # .deb (needs nfpm via wails3)
+wails3 task linux:create:appimage # AppImage
 ```
 
 For a local playground, start a dev agent:
@@ -78,7 +84,7 @@ The `internal/e2e` suite runs against a real `hashicorp/nomad` container and is 
 
 ## Project Status
 
-Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs read-only screens, metrics pipeline, job management operations). Log viewer (M3) and packaging polish (M4/M5) are on the roadmap. The project depends on **Wails v3.0.0-beta.3**.
+Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs screens, metrics pipeline, job management, deploy observability). Darwin / Windows / Linux builds and packaging are supported via Wails Taskfiles (`wails3 build` / `wails3 package`). The project depends on **Wails v3.0.0-beta.3**.
 
 ## Contributing
 
