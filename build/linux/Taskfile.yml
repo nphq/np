@@ -6,7 +6,11 @@ includes:
 tasks:
   build:
     summary: Builds the application for Linux (requires CGO + GTK4/WebKitGTK)
+    # icons/desktop 可并行；tidy/frontend 串行（见 common:build:frontend）
     deps:
+      - task: common:generate:icons
+      - task: generate:dotdesktop
+    cmds:
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -14,9 +18,6 @@ tasks:
             ref: .BUILD_FLAGS
           PRODUCTION:
             ref: .PRODUCTION
-      - task: common:generate:icons
-      - task: generate:dotdesktop
-    cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'

@@ -6,7 +6,11 @@ includes:
 tasks:
   build:
     summary: Builds the application for Windows
+    # icons 与 Go/前端无共享文件锁，可并行；tidy 必须在 frontend 之前完成，
+    # 且 frontend 内部 install→bindings 也已串行（见 common:build:frontend）。
     deps:
+      - task: common:generate:icons
+    cmds:
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -14,8 +18,6 @@ tasks:
             ref: .BUILD_FLAGS
           PRODUCTION:
             ref: .PRODUCTION
-      - task: common:generate:icons
-    cmds:
       - task: generate:syso
         vars:
           ARCH: '{{.ARCH}}'

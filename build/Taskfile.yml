@@ -27,13 +27,14 @@ tasks:
       - exclude: node_modules/**/*
     generates:
       - dist/**/*
-    deps:
+    # 必须串行：bun install 写 node_modules 时若并行跑 go mod tidy / bindings，
+    # Windows 会因文件锁失败（The process cannot access the file...）。
+    cmds:
       - task: install:frontend:deps
       - task: generate:bindings
         vars:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
-    cmds:
       - bun run build
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
@@ -41,8 +42,7 @@ tasks:
   generate:bindings:
     label: generate:bindings (BUILD_FLAGS={{.BUILD_FLAGS}})
     summary: Generates bindings for the frontend
-    deps:
-      - task: go:mod:tidy
+    # tidy 放 cmds，保证与调用方（build:frontend）串行顺序可控
     sources:
       - "**/*.[jt]s"
       - exclude: frontend/**/*
@@ -53,6 +53,7 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
+      - task: go:mod:tidy
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true -ts
 
   generate:icons:

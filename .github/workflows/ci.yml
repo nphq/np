@@ -47,9 +47,9 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
-          # v2 配置（.golangci.yml 顶层 version: "2"）；需 action v7+
+          # v2 配置（.golangci.yml 顶层 version: "2"）；action v9 使用 Node.js 24
           version: v2.11.4
 
       - name: Go test
@@ -125,14 +125,14 @@ jobs:
             libwayland-dev
 
       - name: Install Wails v3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4
 
       - name: Wails build
         # 各 runner 原生构建：wails3 build → {{OS}}:build（darwin/windows/linux）
         run: wails3 build
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: np-${{ matrix.platform }}
           path: |

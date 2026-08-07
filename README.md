@@ -19,7 +19,7 @@ Built with **Wails v3 + Go + Svelte 5 + TypeScript**, designed to be fast, keybo
 
 - **Go** ≥ 1.26
 - **Bun** ≥ 1.3 (the only package manager used; do not use npm)
-- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.3`
+- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4`
 - A **Nomad** cluster (≥ 2.0; verified against `hashicorp/nomad:2.0.4`)
 
 ## Getting Started
@@ -111,7 +111,7 @@ The `internal/e2e` suite runs against a real `hashicorp/nomad` container and is 
 
 ## Project Status
 
-Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs screens, metrics pipeline, job management, deploy observability). Darwin / Windows / Linux builds and packaging are supported via Wails Taskfiles (`wails3 build` / `wails3 package`). The project depends on **Wails v3.0.0-beta.3**.
+Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs screens, metrics pipeline, job management, deploy observability). Darwin / Windows / Linux builds and packaging are supported via Wails Taskfiles (`wails3 build` / `wails3 package`). The project depends on **Wails v3.0.0-beta.4**.
 
 ## Contributing
 

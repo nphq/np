@@ -19,7 +19,7 @@
 
 - **Go** ≥ 1.26
 - **Bun** ≥ 1.3（唯一包管理器，请勿混用 npm）
-- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.3`
+- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4`
 - **Nomad** 集群（≥ 2.0；已基于 `hashicorp/nomad:2.0.4` 验证）
 
 ## 快速开始
@@ -111,7 +111,7 @@ cd frontend && bun run lint  # eslint
 
 ## 项目状态
 
-里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job、指标流水线、Job 管理、部署观测）。Darwin / Windows / Linux 构建与打包已通过 Wails Taskfile 支持（`wails3 build` / `wails3 package`）。当前依赖 **Wails v3.0.0-beta.3**。
+里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job、指标流水线、Job 管理、部署观测）。Darwin / Windows / Linux 构建与打包已通过 Wails Taskfile 支持（`wails3 build` / `wails3 package`）。当前依赖 **Wails v3.0.0-beta.4**。
 
 ## 贡献
 

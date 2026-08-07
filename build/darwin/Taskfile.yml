@@ -6,7 +6,9 @@ includes:
 tasks:
   build:
     summary: Creates a build of the application (dev/prod toggled by PRODUCTION var)
-    deps:
+    # tidy 与 frontend 不可并行：frontend 内 bun install 会写 node_modules，
+    # 与 go mod tidy 争用在 Windows CI 上失败（darwin/linux 偶发）。
+    cmds:
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -14,7 +16,6 @@ tasks:
             ref: .BUILD_FLAGS
           PRODUCTION:
             ref: .PRODUCTION
-    cmds:
       - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
