@@ -16,7 +16,9 @@
   } = $props()
 
   let host: HTMLDivElement | undefined = $state()
-  let editor: Monaco.editor.IStandaloneCodeEditor | undefined
+  // 必须是 $state：异步 create 后要触发「把 value 推入 Monaco」的 effect。
+  // 用 $state.raw 避免代理 Monaco 实例。
+  let editor = $state.raw<Monaco.editor.IStandaloneCodeEditor | undefined>(undefined)
   let monaco: typeof Monaco | undefined
   let applying = false
 
@@ -92,11 +94,15 @@
     }
   })
 
+  // 父组件改 value（格式化 JSON / 切换 starter / HCL↔JSON）时推入 Monaco。
+  // 先读 value 再 early-return，确保始终订阅 value；editor 就绪后也会再跑一次。
   $effect(() => {
-    if (!editor) return
-    if (editor.getValue() === value) return
+    const next = value
+    const ed = editor
+    if (!ed) return
+    if (ed.getValue() === next) return
     applying = true
-    editor.setValue(value)
+    ed.setValue(next)
     applying = false
   })
 </script>
