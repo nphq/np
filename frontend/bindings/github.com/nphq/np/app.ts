@@ -24,6 +24,13 @@ export function AddCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> 
 }
 
 /**
+ * DiscoverClusters 探测本机可用连接候选（环境变量/常见配置）。
+ */
+export function DiscoverClusters(): $CancellablePromise<any> {
+    return $Call.ByID(1339163193);
+}
+
+/**
  * EvaluateJob 强制重新评估 job，返回 EvalID。
  */
 export function EvaluateJob(clusterID: string, jobID: string): $CancellablePromise<any> {
@@ -73,6 +80,20 @@ export function GetNodeLoads(clusterID: string): $CancellablePromise<any> {
 }
 
 /**
+ * ImportClusterJSON 导入与 ClusterConfig 同形的 JSON（数组或单对象）。
+ */
+export function ImportClusterJSON(raw: string): $CancellablePromise<any> {
+    return $Call.ByID(3696937696, raw);
+}
+
+/**
+ * ImportFromEnv 从 NOMAD_* 环境变量一键导入并激活集群。
+ */
+export function ImportFromEnv(name: string): $CancellablePromise<any> {
+    return $Call.ByID(3269253331, name);
+}
+
+/**
  * ListAllocTaskEvents 返回 alloc 任务事件时间线。
  */
 export function ListAllocTaskEvents(clusterID: string, allocID: string): $CancellablePromise<any> {
@@ -105,6 +126,13 @@ export function ListJobs(clusterID: string): $CancellablePromise<any> {
  */
 export function ListNodes(clusterID: string): $CancellablePromise<any> {
     return $Call.ByID(3103789542, clusterID);
+}
+
+/**
+ * PinCluster 置顶/取消置顶集群（收藏）。
+ */
+export function PinCluster(clusterID: string, pinned: boolean): $CancellablePromise<any> {
+    return $Call.ByID(1873643878, clusterID, pinned);
 }
 
 /**

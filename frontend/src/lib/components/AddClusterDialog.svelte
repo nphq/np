@@ -22,12 +22,14 @@
     mode = 'add' as Mode,
     initial = new ClusterInput(),
     hasToken = false,
+    discovered = [] as uiapi.DiscoveredCluster[],
     onSubmit,
     onClose,
   } = $props<{
     mode?: Mode
     initial?: ClusterInput
     hasToken?: boolean
+    discovered?: uiapi.DiscoveredCluster[]
     onSubmit: (input: ClusterInput) => Promise<boolean | SubmitResult>
     onClose: () => void
   }>()
@@ -46,6 +48,9 @@
     error?: string
   }>({ kind: 'idle' })
 
+  // 从环境/文件发现的候选（不含 token 明文）；仅填充非敏感字段。
+  let envTokenHint = $state('')
+
   onMount(() => {
     form = new ClusterInput()
     Object.assign(form, initial)
@@ -53,6 +58,24 @@
     if (mode === 'edit') addressInput?.focus()
     else idInput?.focus()
   })
+
+  // 用发现的候选预填非敏感字段（M2.2）。Token 不在 Discover 响应里；
+  // hasToken 时置 useEnvToken：Test/Save 由后端读 NOMAD_TOKEN，不把明文填进 input。
+  function fillFromEnv(): void {
+    const d = discovered[0]
+    if (!d || mode === 'edit') return
+    form.id = d.suggestedID
+    form.name = d.name
+    form.address = d.address
+    form.region = d.region
+    form.namespace = d.namespace
+    form.tls = d.tls
+    form.insecureSkipVerify = d.insecureSkipVerify
+    form.token = ''
+    form.useEnvToken = !!d.hasToken
+    envTokenHint = d.hasToken ? t('discover.usingEnvToken') : ''
+    markDirty()
+  }
 
   function cancel(): void {
     onClose()
@@ -174,13 +197,25 @@
       <h2 class="text-sm font-semibold text-zinc-100">
         {t(mode === 'edit' ? 'cluster.editTitle' : 'cluster.addTitle')}
       </h2>
-      <button
-        class="rounded px-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-        onclick={cancel}
-        aria-label={t('common.cancel')}
-      >
-        ✕
-      </button>
+      <div class="flex items-center gap-1">
+        {#if mode === 'add' && discovered.length > 0}
+          <button
+            type="button"
+            class="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            title={t('discover.fillFromEnvTitle')}
+            onclick={fillFromEnv}
+          >
+            {t('discover.fillFromEnv')}
+          </button>
+        {/if}
+        <button
+          class="rounded px-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+          onclick={cancel}
+          aria-label={t('common.cancel')}
+        >
+          ✕
+        </button>
+      </div>
     </div>
 
     <form
@@ -275,6 +310,9 @@
           value={form.token}
           oninput={(e) => {
             form.token = (e.target as HTMLInputElement).value
+            // 用户手填 token 后不再走环境变量回填
+            form.useEnvToken = false
+            envTokenHint = ''
             markDirty()
           }}
           type="password"
@@ -284,6 +322,9 @@
         />
         <span class="mt-0.5 block text-[10px] text-zinc-600">{t('cluster.hintToken')}</span>
       </label>
+      {#if envTokenHint}
+        <div class="-mt-1 text-[10px] text-amber-500/90">{envTokenHint}</div>
+      {/if}
       {#if mode === 'edit' && hasToken}
         <div class="-mt-1 text-[10px] text-emerald-500/80">{t('cluster.tokenSaved')}</div>
       {/if}

@@ -18,6 +18,20 @@ export namespace uiapi {
     code: string
     message: string
   }
+
+  // DiscoveredCluster 是「从环境/文件发现」的候选，供 UI 预填。
+  // token 明文绝不进响应（hasToken 只表示是否有值）。
+  export interface DiscoveredCluster {
+    source: string // "env" | "file"
+    suggestedID: string
+    name: string
+    address: string
+    region: string
+    namespace: string
+    tls: boolean
+    insecureSkipVerify: boolean
+    hasToken: boolean
+  }
 }
 
 // Page 是顶层路由枚举：Overview/Jobs/Allocs/Nodes/Apps + Job 详情 + Run Job + Settings。
@@ -44,6 +58,15 @@ export namespace nomad {
     hasToken: boolean
     health: string
     lastChecked: number
+    pinned: boolean
+    sortOrder: number
+  }
+
+  // ClusterList 是 ListClusters 的响应：已排序列表 + 活跃集群 ID。
+  // activeID 由后端唯一裁决，前端不做本地双源。
+  export interface ClusterList {
+    clusters: ClusterInfo[]
+    activeID: string
   }
 
   // ClusterHealth 是 TestConnection / TestConnectionInput 的返回。

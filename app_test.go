@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/nphq/np/internal/config"
+	"github.com/nphq/np/internal/nomad"
 	"github.com/nphq/np/internal/secure"
 	"github.com/nphq/np/internal/uiapi"
 )
@@ -19,7 +20,11 @@ func newAppWithDeps(t *testing.T) (*App, *config.Store, *secure.MemoryKeyring) {
 	t.Helper()
 	store := config.New(filepath.Join(t.TempDir(), "clusters.json"))
 	kr := secure.NewMemory()
-	clusters := uiapi.NewClusterService(store, kr)
+	prefs := config.NewPrefs(filepath.Join(t.TempDir(), "preferences.json"))
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	clusters := uiapi.NewClusterService(store, prefs, kr)
 	loads := uiapi.NewLoadsService(clusters.Pool())
 	clusters.OnActiveChanged = loads.Activate
 	return &App{
@@ -69,6 +74,12 @@ func nameForID(id uint32) string {
 		return "SetActiveCluster"
 	case bindingListClusters:
 		return "ListClusters"
+	case bindingDiscoverClusters:
+		return "DiscoverClusters"
+	case bindingImportFromEnv:
+		return "ImportFromEnv"
+	case bindingPinCluster:
+		return "PinCluster"
 	}
 	return ""
 }
@@ -79,6 +90,9 @@ const (
 	bindingRemoveCluster    uint32 = 624040237
 	bindingSetActiveCluster uint32 = 4053701917
 	bindingListClusters     uint32 = 2689603438
+	bindingDiscoverClusters uint32 = 1339163193
+	bindingImportFromEnv    uint32 = 3269253331
+	bindingPinCluster       uint32 = 1873643878
 )
 
 // TestE2ERemoveCluster_ActiveCluster 验证：
@@ -162,5 +176,69 @@ func TestE2ERemoveCluster_InvalidInput(t *testing.T) {
 	}
 	if e.Code != uiapi.CodeInvalidInput {
 		t.Fatalf("code = %v, want CodeInvalidInput", e.Code)
+	}
+}
+
+// TestE2EImportFromEnvBinding 经 v3 binding dispatcher 走 ImportFromEnv 全链路：
+// env → 建集群 + 自动激活；ListClusters 响应带 activeID（前端单一数据源）。
+func TestE2EImportFromEnvBinding(t *testing.T) {
+	t.Setenv("NOMAD_ADDR", "http://127.0.0.1:4646")
+	t.Setenv("NOMAD_TOKEN", "binding-secret")
+	app, _, kr := newAppWithDeps(t)
+
+	result, err := callBinding(t, app, bindingImportFromEnv, "Imported")
+	if err != nil {
+		t.Fatalf("ImportFromEnv binding: %v", err)
+	}
+	info, ok := result.(*nomad.ClusterInfo)
+	if !ok {
+		t.Fatalf("expected *nomad.ClusterInfo, got %T", result)
+	}
+	if info.ID != "local" || info.Name != "Imported" {
+		t.Fatalf("info = %+v", info)
+	}
+	if app.clusters.ActiveCluster() != "local" {
+		t.Fatalf("active = %q, want local", app.clusters.ActiveCluster())
+	}
+	// token 只进 keychain
+	if tok, err := kr.GetToken("local"); err != nil || tok != "binding-secret" {
+		t.Fatalf("keychain token = %q, %v", tok, err)
+	}
+	// ListClusters 响应带 activeID（前端单一数据源）
+	if list, e := app.clusters.ListClusters(); e != nil || list.ActiveID != "local" || len(list.Clusters) != 1 {
+		t.Fatalf("ListClusters = %+v, %v", list, e)
+	}
+}
+
+// TestE2EPinClusterBinding 经 dispatcher 置顶：ListClusters 顺序与 Pinned 字段生效。
+func TestE2EPinClusterBinding(t *testing.T) {
+	app, _, _ := newAppWithDeps(t)
+	_ = app.clusters.AddCluster(uiapi.ClusterInput{ID: "z", Name: "Z", Address: "http://z:4646"})
+	_ = app.clusters.AddCluster(uiapi.ClusterInput{ID: "a", Name: "A", Address: "http://a:4646"})
+
+	if _, err := callBinding(t, app, bindingPinCluster, "z", true); err != nil {
+		t.Fatalf("PinCluster binding: %v", err)
+	}
+	list, e := app.clusters.ListClusters()
+	if e != nil || list.Clusters[0].ID != "z" || !list.Clusters[0].Pinned {
+		t.Fatalf("list = %+v, %v", list, e)
+	}
+}
+
+// TestE2EDiscoverClustersBinding Discover 经 dispatcher 返回候选（无 env 为空、不报错）。
+func TestE2EDiscoverClustersBinding(t *testing.T) {
+	t.Setenv("NOMAD_ADDR", "http://127.0.0.1:4646")
+	app, _, _ := newAppWithDeps(t)
+
+	result, err := callBinding(t, app, bindingDiscoverClusters)
+	if err != nil {
+		t.Fatalf("DiscoverClusters binding: %v", err)
+	}
+	list, ok := result.([]uiapi.DiscoveredCluster)
+	if !ok {
+		t.Fatalf("expected []uiapi.DiscoveredCluster, got %T", result)
+	}
+	if len(list) != 1 || list[0].SuggestedID != "local" {
+		t.Fatalf("list = %+v", list)
 	}
 }

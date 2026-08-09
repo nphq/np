@@ -15,6 +15,15 @@ type ClusterInfo struct {
 	HasToken           bool   `json:"hasToken"` // Keychain 里是否有 token（不暴露 token 本身）
 	Health             string `json:"health"`   // "unknown" | "ok" | "down"
 	LastChecked        int64  `json:"lastChecked"`
+	Pinned             bool   `json:"pinned"` // 收藏/置顶
+	SortOrder          int    `json:"sortOrder"`
+}
+
+// ClusterList 是 ListClusters 的响应：集群列表（已按 §3.1 排序）+ 活跃集群 ID。
+// activeID 由后端唯一裁决，前端不做本地双源。
+type ClusterList struct {
+	Clusters []ClusterInfo `json:"clusters"`
+	ActiveID string        `json:"activeID"`
 }
 
 // ClusterHealth 是 TestConnection / 健康检查的返回。

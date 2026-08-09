@@ -2,6 +2,9 @@ package uiapi
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +27,16 @@ type ClusterInput struct {
 	TLS                bool   `json:"tls"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 	Token              string `json:"token"` // 可选：留空则沿用 Keychain 已有 token
+	// UseEnvToken：为 true 且 Token 为空时，用 NOMAD_TOKEN（不经前端明文往返）。
+	UseEnvToken bool `json:"useEnvToken,omitempty"`
+}
+
+// applyEnvToken 在 UseEnvToken 且 Token 为空时从环境补齐 token。
+func (in *ClusterInput) applyEnvToken() {
+	if in == nil || !in.UseEnvToken || strings.TrimSpace(in.Token) != "" {
+		return
+	}
+	in.Token = os.Getenv("NOMAD_TOKEN")
 }
 
 // Validate 一次性收集全部校验错误，方便前端内联展示（一次提示完所有问题）。
@@ -53,6 +66,7 @@ func (in ClusterInput) Validate() *Error {
 // ClusterService 承载集群相关的全部 IPC 逻辑。
 type ClusterService struct {
 	cfg     *config.Store
+	prefs   *config.PrefsStore
 	keyring secure.Keyring
 	pool    *cluster.Pool
 	monitor *cluster.HealthMonitor
@@ -81,9 +95,11 @@ func (s *ClusterService) SetApp(app *application.App) {
 }
 
 // NewClusterService 创建集群服务，并挂上健康 monitor（Run 由 Start 触发）。
-func NewClusterService(cfg *config.Store, kr secure.Keyring) *ClusterService {
+// prefs 持久化活跃集群（重启恢复）；可为 nil（无偏好存储时不落盘）。
+func NewClusterService(cfg *config.Store, prefs *config.PrefsStore, kr secure.Keyring) *ClusterService {
 	s := &ClusterService{
 		cfg:     cfg,
+		prefs:   prefs,
 		keyring: kr,
 		pool:    cluster.NewPool(cfg, kr),
 	}
@@ -109,40 +125,72 @@ func (s *ClusterService) Stop() {
 // Pool 暴露底层客户端池（供 stream / jobs 等服务复用）。
 func (s *ClusterService) Pool() *cluster.Pool { return s.pool }
 
-// ListClusters 返回全部集群及健康状态。
+// ListClusters 返回全部集群（§3.1 排序：Pinned 在前 → SortOrder → Name → ID）
+// 及活跃集群 ID（后端唯一裁决，前端不做本地双源）。
 // 注意：健康数据读 monitor 缓存，不再同步阻塞探测（M1 §7 验收：首屏不卡）。
-func (s *ClusterService) ListClusters() ([]nomad.ClusterInfo, *Error) {
+func (s *ClusterService) ListClusters() (nomad.ClusterList, *Error) {
 	cfgs, err := s.cfg.List()
 	if err != nil {
-		return nil, Wrap(err)
+		return nomad.ClusterList{}, Wrap(err)
 	}
 	out := make([]nomad.ClusterInfo, 0, len(cfgs))
-	for _, c := range cfgs {
-		info := nomad.ClusterInfo{
-			ID:                 c.ID,
-			Name:               c.Name,
-			Address:            c.Address,
-			Region:             c.Region,
-			Namespace:          c.Namespace,
-			TLS:                c.TLS,
-			InsecureSkipVerify: c.InsecureSkipVerify,
-			Health:             "unknown",
-		}
-		// HasToken：Keychain 是否存有 token。不暴露 token 本身。
-		if _, err := s.keyring.GetToken(c.ID); err == nil {
-			info.HasToken = true
-		}
-		if u, ok := s.monitor.Latest(c.ID); ok {
-			info.Health = u.Status
-			info.LastChecked = u.LastChecked
-		}
-		out = append(out, info)
+	for _, c := range sortedConfigs(cfgs) {
+		out = append(out, s.clusterInfo(c))
 	}
-	return out, nil
+	return nomad.ClusterList{
+		Clusters: out,
+		ActiveID: s.ActiveCluster(),
+	}, nil
+}
+
+// sortedConfigs 按 §3.1 排序规则排序：Pinned 在前，组内 SortOrder 升序 → Name → ID。
+// 排序在服务端统一执行，前端不再本地重排，避免两端不一致。
+func sortedConfigs(cfgs []*config.ClusterConfig) []*config.ClusterConfig {
+	out := append([]*config.ClusterConfig(nil), cfgs...)
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Pinned != b.Pinned {
+			return a.Pinned
+		}
+		if a.SortOrder != b.SortOrder {
+			return a.SortOrder < b.SortOrder
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.ID < b.ID
+	})
+	return out
+}
+
+// clusterInfo 由 ClusterConfig 构建前端可见的 ClusterInfo（含健康/Keychain 状态）。
+func (s *ClusterService) clusterInfo(c *config.ClusterConfig) nomad.ClusterInfo {
+	info := nomad.ClusterInfo{
+		ID:                 c.ID,
+		Name:               c.Name,
+		Address:            c.Address,
+		Region:             c.Region,
+		Namespace:          c.Namespace,
+		TLS:                c.TLS,
+		InsecureSkipVerify: c.InsecureSkipVerify,
+		Pinned:             c.Pinned,
+		SortOrder:          c.SortOrder,
+		Health:             "unknown",
+	}
+	// HasToken：Keychain 是否存有 token。不暴露 token 本身。
+	if _, err := s.keyring.GetToken(c.ID); err == nil {
+		info.HasToken = true
+	}
+	if u, ok := s.monitor.Latest(c.ID); ok {
+		info.Health = u.Status
+		info.LastChecked = u.LastChecked
+	}
+	return info
 }
 
 // AddCluster 新增集群：校验 → 落盘配置 → token 入 Keychain。
 func (s *ClusterService) AddCluster(in ClusterInput) *Error {
+	in.applyEnvToken()
 	if e := in.Validate(); e != nil {
 		return e
 	}
@@ -170,19 +218,36 @@ func (s *ClusterService) AddCluster(in ClusterInput) *Error {
 }
 
 // RemoveCluster 删除集群：停池、清 Keychain、删配置。
+// 若删的是当前活跃集群，按 §5.2 回退：下一个 Pinned → 列表第一项 → 清空 active。
 func (s *ClusterService) RemoveCluster(clusterID string) *Error {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return NewError(CodeInvalidInput, "%v", err)
 	}
-	// 先把 active 清掉（若删的正是当前 active），否则 M2 registry 会留悬空 ID
-	s.clearActiveIfMatches(clusterID)
 	// 让池里这个集群的 client 失效；否则用同 ID 重加时仍会拿到带旧 token 的旧 client
 	s.pool.Invalidate(clusterID)
 	if err := s.cfg.Delete(clusterID); err != nil {
 		return Wrap(err)
 	}
 	_ = s.keyring.DeleteToken(clusterID) // 忽略不存在
+	if s.ActiveCluster() == clusterID {
+		s.activateFallback()
+	}
 	return nil
+}
+
+// activateFallback 是删除活跃集群后的回退（§5.2）：
+// 下一个 Pinned（排序已在最前）→ 否则列表第一项 → 否则清空 active。
+func (s *ClusterService) activateFallback() {
+	cfgs, err := s.cfg.List()
+	if err != nil || len(cfgs) == 0 {
+		s.clearActive()
+		return
+	}
+	next := sortedConfigs(cfgs)[0]
+	if e := s.SetActiveCluster(next.ID); e != nil {
+		// 回退失败不阻断删除；至少清空 active 避免悬空
+		s.clearActive()
+	}
 }
 
 // TestConnection 手动探测集群连通性（5s 超时）。同步探测一次，结果也喂入 monitor 缓存。
@@ -198,8 +263,9 @@ func (s *ClusterService) TestConnection(clusterID string) (nomad.ClusterHealth, 
 }
 
 // TestConnectionInput 用未落盘的 ClusterInput 探测连通性（添加集群前的 Test 按钮）。
-// 不写配置、不读 Keychain；token 直接用 input 里的（可为空）。
+// 不写配置、不读 Keychain；token 直接用 input 里的（可为空；UseEnvToken 时读 NOMAD_TOKEN）。
 func (s *ClusterService) TestConnectionInput(in ClusterInput) (nomad.ClusterHealth, *Error) {
+	in.applyEnvToken()
 	if e := in.Validate(); e != nil {
 		return nomad.ClusterHealth{}, e
 	}
@@ -231,6 +297,7 @@ func (s *ClusterService) probeTarget(clusterID string, target cluster.ProbeTarge
 // UpdateCluster 编辑已有集群配置。ID 不可改（系统键）；Token 为空保留旧 token。
 // 落盘后 Invalidate Pool 缓存，下次 Get 用新 addr/token 重建 client。
 func (s *ClusterService) UpdateCluster(in ClusterInput) *Error {
+	in.applyEnvToken()
 	if err := ValidateClusterID(in.ID); err != nil {
 		return NewError(CodeInvalidInput, "%v", err)
 	}
@@ -248,8 +315,9 @@ func (s *ClusterService) UpdateCluster(in ClusterInput) *Error {
 		return NewError(CodeInvalidInput, "%v", err)
 	}
 
-	// 现有集群必须存在
-	if _, err := s.cfg.Get(in.ID); err != nil {
+	// 现有集群必须存在；保留 Pinned/SortOrder（编辑不该清掉收藏）
+	existing, err := s.cfg.Get(in.ID)
+	if err != nil {
 		return Wrap(err)
 	}
 
@@ -261,6 +329,8 @@ func (s *ClusterService) UpdateCluster(in ClusterInput) *Error {
 		Namespace:          in.Namespace,
 		TLS:                in.TLS,
 		InsecureSkipVerify: in.InsecureSkipVerify,
+		Pinned:             existing.Pinned,
+		SortOrder:          existing.SortOrder,
 	}
 	if err := s.cfg.Update(cfg); err != nil {
 		return Wrap(err)
@@ -276,7 +346,7 @@ func (s *ClusterService) UpdateCluster(in ClusterInput) *Error {
 	return nil
 }
 
-// SetActiveCluster 激活集群。
+// SetActiveCluster 激活集群（成功后持久化到 prefs，重启后自动恢复）。
 func (s *ClusterService) SetActiveCluster(clusterID string) *Error {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return NewError(CodeInvalidInput, "%v", err)
@@ -287,6 +357,12 @@ func (s *ClusterService) SetActiveCluster(clusterID string) *Error {
 	s.activeMu.Lock()
 	s.active = clusterID
 	s.activeMu.Unlock()
+	if s.prefs != nil {
+		if err := s.prefs.SetActive(clusterID); err != nil {
+			// 偏好落盘失败不阻断激活（下次启动恢复不了，但本次会话可用）
+			fmt.Printf("WARN: persist active pref: %v\n", err)
+		}
+	}
 	if s.OnActiveChanged != nil {
 		s.OnActiveChanged(clusterID)
 	}
@@ -300,17 +376,62 @@ func (s *ClusterService) ActiveCluster() string {
 	return s.active
 }
 
-// clearActiveIfMatches 是 CAS 风格的 active 清空：仅当当前 active 等于 id 时才清。
-// 用于 RemoveCluster：删除 active 集群时清空，删别的集群不影响 active。
-func (s *ClusterService) clearActiveIfMatches(id string) {
-	s.activeMu.Lock()
-	changed := false
-	if s.active == id {
-		s.active = ""
-		changed = true
+// RestoreActive 在启动时恢复上次活跃集群：prefs 有 activeClusterID 且集群
+// 仍存在 → 内部激活（触发 OnActiveChanged → 各 store 拉数）；集群已被删除
+// 则清空偏好，回空状态。不阻断启动（集群挂了也恢复选中，健康点显示 down）。
+func (s *ClusterService) RestoreActive() {
+	if s.prefs == nil {
+		return
 	}
+	id, err := s.prefs.GetActive()
+	if err != nil {
+		fmt.Printf("WARN: load prefs for RestoreActive: %v\n", err)
+		return
+	}
+	if id == "" {
+		return
+	}
+	if _, err := s.cfg.Get(id); err != nil {
+		// 上次的集群已被删掉（如手动清了 clusters.json）→ 清理偏好
+		_ = s.prefs.ClearActive()
+		return
+	}
+	s.activeMu.Lock()
+	s.active = id
 	s.activeMu.Unlock()
-	if changed && s.OnActiveChanged != nil {
+	if s.OnActiveChanged != nil {
+		s.OnActiveChanged(id)
+	}
+}
+
+// PinCluster 置顶/取消置顶集群（收藏）。SortOrder 保留原值，不隐式修改。
+func (s *ClusterService) PinCluster(clusterID string, pinned bool) *Error {
+	if err := ValidateClusterID(clusterID); err != nil {
+		return NewError(CodeInvalidInput, "%v", err)
+	}
+	cfg, err := s.cfg.Get(clusterID)
+	if err != nil {
+		return Wrap(err)
+	}
+	if cfg.Pinned == pinned {
+		return nil
+	}
+	cfg.Pinned = pinned
+	if err := s.cfg.Update(cfg); err != nil {
+		return Wrap(err)
+	}
+	return nil
+}
+
+// clearActive 清空 active（无回退目标时的最终兜底）。
+func (s *ClusterService) clearActive() {
+	s.activeMu.Lock()
+	s.active = ""
+	s.activeMu.Unlock()
+	if s.prefs != nil {
+		_ = s.prefs.ClearActive()
+	}
+	if s.OnActiveChanged != nil {
 		s.OnActiveChanged("")
 	}
 }

@@ -18,9 +18,11 @@
 ## 环境要求
 
 - **Go** ≥ 1.26
-- **Bun** ≥ 1.3（唯一包管理器，请勿混用 npm）
+- **Bun** ≥ 1.3 — 唯一的 JS 工具链：包管理、Vite 构建、lint 与测试全部跑在 Bun 下。**不需要 Node.js**（CI 与 lefthook 只用 `bun`；已在无 Node 的 PATH 下验证）。
 - **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4`
 - **Nomad** 集群（≥ 2.0；已基于 `hashicorp/nomad:2.0.4` 验证）
+
+> 前端产物按路由拆包：只加载当前页面。CodeMirror 编辑器（约 300KB）进入「运行任务」页时才按需拉取；入口 chunk 约 147KB（gzip 约 49KB）。
 
 ## 快速开始
 
@@ -50,6 +52,25 @@ docker compose up -d
 ```
 
 启动应用后点击 **添加集群**，填入 `http://127.0.0.1:4646` 即可连接。
+
+### 连接体验：环境变量一键导入
+
+设置好 Nomad CLI 标准环境变量后，空状态会出现「从环境变量导入」（或添加对话框内「填充环境变量」）。活跃集群在重启后自动恢复，新增集群自动激活。
+
+| 环境变量 | 映射 |
+| --- | --- |
+| `NOMAD_ADDR` | 地址（协议可省略，默认 `http://`） |
+| `NOMAD_TOKEN` | ACL Token —— 只进系统钥匙串，绝不写配置文件 |
+| `NOMAD_REGION` | Region |
+| `NOMAD_NAMESPACE` | Namespace |
+| `NOMAD_SKIP_VERIFY` | `true`/`1`/`yes` → HTTPS + 跳过证书校验 |
+
+```bash
+export NOMAD_ADDR=http://127.0.0.1:4646
+# 可选：export NOMAD_TOKEN=... NOMAD_REGION=global
+```
+
+Token 不经前端往返：导入在服务端一步完成。文件 CA（`NOMAD_CACERT`）暂不支持。侧边栏可置顶（★）常用集群，排序在重启后保留。
 
 ## 部署非容器（原生）应用
 

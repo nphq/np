@@ -184,6 +184,17 @@ const zh = {
   'cluster.removeBody': '“{name}”及其存储在钥匙串中的 token 将被移除。',
   'cluster.remove': '移除',
   'cluster.edit': '编辑',
+  'cluster.pin': '置顶',
+  'cluster.unpin': '取消置顶',
+
+  // 集群发现 / 环境导入（M2.2）
+  'discover.importFromEnv': '从环境变量导入',
+  'discover.imported': '已从环境导入并连接：{name}',
+  'discover.noEnv': '未检测到 NOMAD_ADDR — 设置环境变量后即可一键导入。',
+  'discover.fillFromEnv': '填充环境变量',
+  'discover.fillFromEnvTitle': '用 NOMAD_* 预填表单；有 Token 时由后端读取，不填入输入框',
+  'discover.importName': '来自环境变量',
+  'discover.usingEnvToken': '将使用环境中的 Token（测试/保存时由后端读取）',
 
   // 总览（Overview）
   'overview.polling': '15s 轮询 · 容量 / 已分配 / 已用 · CPU MHz · 内存/磁盘 MB',

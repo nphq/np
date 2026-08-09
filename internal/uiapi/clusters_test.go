@@ -24,9 +24,19 @@ func stringContains(s, sub string) bool {
 
 func testService(t *testing.T) (*ClusterService, *config.Store, *secure.MemoryKeyring) {
 	t.Helper()
-	store := config.New(filepath.Join(t.TempDir(), "clusters.json"))
+	return testServiceAt(t, filepath.Join(t.TempDir(), "clusters.json"), filepath.Join(t.TempDir(), "preferences.json"))
+}
+
+// testServiceAt 用指定路径构建服务，便于模拟「重启」（同一磁盘文件复用）。
+func testServiceAt(t *testing.T, cfgPath, prefsPath string) (*ClusterService, *config.Store, *secure.MemoryKeyring) {
+	t.Helper()
+	store := config.New(cfgPath)
 	kr := secure.NewMemory()
-	return NewClusterService(store, kr), store, kr
+	prefs := config.NewPrefs(prefsPath)
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	return NewClusterService(store, prefs, kr), store, kr
 }
 
 func nomadTestServer(t *testing.T) *httptest.Server {
@@ -118,7 +128,7 @@ func TestAddRemoveClusterLifecycle(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(list) != 1 || list[0].ID != "dev-1" {
+	if len(list.Clusters) != 1 || list.Clusters[0].ID != "dev-1" {
 		t.Fatalf("list = %+v", list)
 	}
 
@@ -146,6 +156,33 @@ func TestAddClusterDuplicate(t *testing.T) {
 	}
 }
 
+// TestAddClusterUseEnvToken：UseEnvToken + 空 Token → 后端读 NOMAD_TOKEN 入 Keychain。
+func TestAddClusterUseEnvToken(t *testing.T) {
+	svc, _, kr := testService(t)
+	t.Setenv("NOMAD_TOKEN", "from-env-secret")
+	if err := svc.AddCluster(ClusterInput{
+		ID: "envtok", Name: "E", Address: "http://x:4646",
+		UseEnvToken: true,
+	}); err != nil {
+		t.Fatalf("AddCluster: %v", err)
+	}
+	tok, err := kr.GetToken("envtok")
+	if err != nil || tok != "from-env-secret" {
+		t.Fatalf("keychain token = %q, %v", tok, err)
+	}
+	// 显式 Token 优先于 UseEnvToken
+	if err := svc.AddCluster(ClusterInput{
+		ID: "envtok2", Name: "E2", Address: "http://y:4646",
+		Token: "explicit", UseEnvToken: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tok, err = kr.GetToken("envtok2")
+	if err != nil || tok != "explicit" {
+		t.Fatalf("explicit token = %q, %v", tok, err)
+	}
+}
+
 // ListClusters 必须如实反映 Keychain 是否有 token、以及 InsecureSkipVerify 设置。
 // 回归保险：编辑时 UI 不能误判 token 状态（"已存 token" 徽章不出现）或静默丢失 skip-verify。
 func TestListClustersReflectsTokenAndTLSFlags(t *testing.T) {
@@ -170,11 +207,11 @@ func TestListClustersReflectsTokenAndTLSFlags(t *testing.T) {
 		t.Fatal(e)
 	}
 	byID := map[string]int{}
-	for i, c := range list {
+	for i, c := range list.Clusters {
 		byID[c.ID] = i
 	}
 
-	c1 := list[byID["c1"]]
+	c1 := list.Clusters[byID["c1"]]
 	if !c1.HasToken {
 		t.Errorf("c1 HasToken = false; want true (token saved)")
 	}
@@ -182,7 +219,7 @@ func TestListClustersReflectsTokenAndTLSFlags(t *testing.T) {
 		t.Errorf("c1 InsecureSkipVerify = false; want true (silent reset regression)")
 	}
 
-	c2 := list[byID["c2"]]
+	c2 := list.Clusters[byID["c2"]]
 	if c2.HasToken {
 		t.Errorf("c2 HasToken = true; want false (no token saved)")
 	}
@@ -195,7 +232,7 @@ func TestListClustersReflectsTokenAndTLSFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	list2, _ := svc.ListClusters()
-	c1b := list2[byID["c1"]]
+	c1b := list2.Clusters[byID["c1"]]
 	if c1b.HasToken {
 		t.Errorf("c1 HasToken = true after DeleteToken; want false")
 	}

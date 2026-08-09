@@ -22,6 +22,11 @@ export class ClusterInput {
      */
     "token": string;
 
+    /**
+     * UseEnvToken：为 true 且 Token 为空时，用 NOMAD_TOKEN（不经前端明文往返）。
+     */
+    "useEnvToken"?: boolean;
+
     /** Creates a new ClusterInput instance. */
     constructor($$source: Partial<ClusterInput> = {}) {
         if (!("id" in $$source)) {

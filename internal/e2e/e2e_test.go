@@ -25,7 +25,11 @@ func newService(t *testing.T) *uiapi.ClusterService {
 	t.Helper()
 	store := config.New(filepath.Join(t.TempDir(), "clusters.json"))
 	kr := secure.NewMemory()
-	return uiapi.NewClusterService(store, kr)
+	prefs := config.NewPrefs(filepath.Join(t.TempDir(), "preferences.json"))
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	return uiapi.NewClusterService(store, prefs, kr)
 }
 
 // withCluster 启动共享 Nomad 并创建 ClusterService，支持 -short 跳过与失败时自动 dump 日志
@@ -93,8 +97,8 @@ func TestE2E_AddClusterEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters before add: %v", e)
 	}
-	if len(before) != 0 {
-		t.Fatalf("expected empty list before add, got %d items", len(before))
+	if len(before.Clusters) != 0 {
+		t.Fatalf("expected empty list before add, got %d items", len(before.Clusters))
 	}
 
 	// 2. 添加集群
@@ -112,10 +116,10 @@ func TestE2E_AddClusterEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters after add: %v", e)
 	}
-	if len(after) != 1 {
-		t.Fatalf("expected 1 cluster, got %d: %+v", len(after), after)
+	if len(after.Clusters) != 1 {
+		t.Fatalf("expected 1 cluster, got %d: %+v", len(after.Clusters), after)
 	}
-	c := after[0]
+	c := after.Clusters[0]
 	if c.ID != "e2e-full" || c.Name != "E2E Full Test" || c.Address != n.Address {
 		t.Fatalf("cluster fields mismatch: %+v", c)
 	}
@@ -140,10 +144,10 @@ func TestE2E_AddClusterEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters after probe: %v", e)
 	}
-	if list[0].Health != "ok" {
-		t.Fatalf("health after probe should be ok, got %s", list[0].Health)
+	if list.Clusters[0].Health != "ok" {
+		t.Fatalf("health after probe should be ok, got %s", list.Clusters[0].Health)
 	}
-	if list[0].LastChecked == 0 {
+	if list.Clusters[0].LastChecked == 0 {
 		t.Fatal("LastChecked not updated")
 	}
 }
@@ -213,7 +217,7 @@ func TestE2E_RemoveClusterInvalidatesPool(t *testing.T) {
 
 	// 验证配置确实更新为 Dev2
 	list, _ := svc.ListClusters()
-	if len(list) != 1 || list[0].Name != "Dev2" {
+	if len(list.Clusters) != 1 || list.Clusters[0].Name != "Dev2" {
 		t.Fatalf("list = %+v", list)
 	}
 }
@@ -260,7 +264,7 @@ func TestE2E_RegisterClusterUserFlow(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters before: %v", e)
 	}
-	nBefore := len(before)
+	nBefore := len(before.Clusters)
 
 	// 1. AddCluster
 	if e := svc.AddCluster(uiapi.ClusterInput{
@@ -274,11 +278,11 @@ func TestE2E_RegisterClusterUserFlow(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters after add: %v", e)
 	}
-	if len(list) != nBefore+1 {
-		t.Fatalf("expected %d clusters, got %d", nBefore+1, len(list))
+	if len(list.Clusters) != nBefore+1 {
+		t.Fatalf("expected %d clusters, got %d", nBefore+1, len(list.Clusters))
 	}
 	var found bool
-	for _, c := range list {
+	for _, c := range list.Clusters {
 		if c.ID == id {
 			found = true
 			if c.Health != "unknown" {
@@ -312,7 +316,7 @@ func TestE2E_RegisterClusterUserFlow(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters after probe: %v", e)
 	}
-	for _, c := range list2 {
+	for _, c := range list2.Clusters {
 		if c.ID == id && c.Health != "ok" {
 			t.Fatalf("health after probe = %s, want ok", c.Health)
 		}
@@ -329,10 +333,10 @@ func TestE2E_RegisterClusterUserFlow(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ListClusters after remove: %v", e)
 	}
-	if len(final) != nBefore {
-		t.Fatalf("expected %d clusters after remove, got %d", nBefore, len(final))
+	if len(final.Clusters) != nBefore {
+		t.Fatalf("expected %d clusters after remove, got %d", nBefore, len(final.Clusters))
 	}
-	for _, c := range final {
+	for _, c := range final.Clusters {
 		if c.ID == id {
 			t.Fatalf("cluster %s still present after remove", id)
 		}
@@ -377,12 +381,12 @@ func TestE2E_MultiClusterPoolIsolation(t *testing.T) {
 		t.Fatalf("active = %q, want second", svc.ActiveCluster())
 	}
 
-	// 删 second：active 应被清空（CAS 命中），但 dev 不受影响
+	// 删 second（当前 active）：§5.2 回退到剩余第一个集群（dev），dev 不受影响
 	if e := svc.RemoveCluster("second"); e != nil {
 		t.Fatalf("RemoveCluster second: %v", e)
 	}
-	if svc.ActiveCluster() != "" {
-		t.Fatalf("active should be cleared (was 'second'), got %q", svc.ActiveCluster())
+	if got := svc.ActiveCluster(); got != "dev" {
+		t.Fatalf("active should fall back to 'dev' after removing 'second', got %q", got)
 	}
 	h3, e := svc.TestConnection("dev")
 	if e != nil {
@@ -401,7 +405,11 @@ func TestE2E_TokenGoesToKeyringOnly(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "clusters.json")
 	store := config.New(cfgPath)
 	kr := secure.NewMemory()
-	svc := uiapi.NewClusterService(store, kr)
+	prefs := config.NewPrefs(filepath.Join(t.TempDir(), "preferences.json"))
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	svc := uiapi.NewClusterService(store, prefs, kr)
 
 	const secret = "super-secret-token-xyz"
 	if e := svc.AddCluster(uiapi.ClusterInput{
@@ -441,7 +449,67 @@ func TestE2E_TokenGoesToKeyringOnly(t *testing.T) {
 	}
 }
 
-// 9. TestE2E_AddClusterRejectsInvalidInput 在 e2e 边界验证校验：各种坏输入都返回
+// 9. TestE2E_ImportFromEnvAndRestart 一键导入闭环：
+// 设 NOMAD_* env → ImportFromEnv → 列表出现且激活、token 只进 Keychain、
+// clusters.json 无 token → 模拟重启（同路径重建服务）→ RestoreActive 恢复。
+func TestE2E_ImportFromEnvAndRestart(t *testing.T) {
+	n, _ := withCluster(t)
+
+	t.Setenv("NOMAD_ADDR", n.Address)
+	t.Setenv("NOMAD_TOKEN", "e2e-env-secret")
+	t.Setenv("NOMAD_REGION", "global")
+
+	cfgPath := filepath.Join(t.TempDir(), "clusters.json")
+	prefsPath := filepath.Join(t.TempDir(), "preferences.json")
+	store := config.New(cfgPath)
+	kr := secure.NewMemory()
+	prefs := config.NewPrefs(prefsPath)
+	if err := prefs.Load(); err != nil {
+		t.Fatal(err)
+	}
+	svc := uiapi.NewClusterService(store, prefs, kr)
+
+	// 一键导入 → 建集群 + 自动激活
+	info, e := svc.ImportFromEnv("E2E Imported")
+	if e != nil {
+		t.Fatalf("ImportFromEnv: %v", e)
+	}
+	if info.ID != "local" || info.Address != n.Address {
+		t.Fatalf("info = %+v", info)
+	}
+	if svc.ActiveCluster() != "local" {
+		t.Fatalf("active = %q, want local", svc.ActiveCluster())
+	}
+
+	// 连通性 OK
+	h, e := svc.TestConnection("local")
+	if e != nil || h.Status != "ok" {
+		t.Fatalf("TestConnection: %+v, %v", h, e)
+	}
+
+	// token 只进 Keychain，绝不落盘
+	if tok, err := kr.GetToken("local"); err != nil || tok != "e2e-env-secret" {
+		t.Fatalf("keychain token = %q, %v", tok, err)
+	}
+	data, _ := os.ReadFile(cfgPath)
+	if strings.Contains(string(data), "e2e-env-secret") {
+		t.Fatalf("TOKEN LEAKED INTO CONFIG:\n%s", string(data))
+	}
+
+	// 模拟重启：同路径重建 → RestoreActive 恢复 active
+	svc2 := uiapi.NewClusterService(store, prefs, kr)
+	var restored string
+	svc2.OnActiveChanged = func(id string) { restored = id }
+	svc2.RestoreActive()
+	if svc2.ActiveCluster() != "local" || restored != "local" {
+		t.Fatalf("restore: active=%q restored=%q", svc2.ActiveCluster(), restored)
+	}
+	if got, err := prefs.GetActive(); err != nil || got != "local" {
+		t.Fatalf("prefs active = %q err=%v", got, err)
+	}
+}
+
+// 10. TestE2E_AddClusterRejectsInvalidInput 在 e2e 边界验证校验：各种坏输入都返回
 // CodeInvalidInput，重复 ID 返回 CodeDuplicate。
 func TestE2E_AddClusterRejectsInvalidInput(t *testing.T) {
 	n, svc := connectCluster(t) // 已含 'dev'，用于 duplicate 用例

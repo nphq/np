@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { createClustersStore, toastState } from './lib/stores/clusters.svelte'
+  import { createClustersStore, toast, toastState } from './lib/stores/clusters.svelte'
   import { createUiStore } from './lib/stores/ui.svelte'
   import { createLoadsStore } from './lib/stores/loads.svelte'
   import { createNodesStore } from './lib/stores/nodes.svelte'
@@ -8,16 +8,28 @@
   import { i18n, t } from './lib/i18n/index.svelte'
   import AddClusterDialog from './lib/components/AddClusterDialog.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
-  import OverviewScreen from './lib/components/load/OverviewScreen.svelte'
-  import NodesScreen from './lib/components/nodes/NodesScreen.svelte'
-  import NodeDetailScreen from './lib/components/nodes/NodeDetailScreen.svelte'
-  import JobsScreen from './lib/components/jobs/JobsScreen.svelte'
-  import JobDetailScreen from './lib/components/jobs/JobDetailScreen.svelte'
-  import JobRunScreen from './lib/components/jobs/JobRunScreen.svelte'
-  import AppsScreen from './lib/components/apps/AppsScreen.svelte'
-  import SettingsScreen from './lib/components/SettingsScreen.svelte'
   import type { ClusterInput } from './lib/stores/clusters.svelte'
   import type { Page } from './lib/types/wails'
+
+  // 路由懒加载：页面组件按需拆包。CodeMirror 只被 job-run 链路（JobRunScreen →
+  // JobSpecEditor）引用，拆包后首包不再含编辑器依赖（~300KB）。
+  // lazy() 缓存模块 promise：切走再切回不重新 fetch；返回类型保持具体组件类型，
+  // 动态组件的 props 检查不退化。
+  // 'allocs' 页无独立组件（模板里内联占位）。
+  function lazy<M>(loader: () => Promise<M>): () => Promise<M> {
+    let cached: Promise<M> | undefined
+    return () => (cached ??= loader())
+  }
+  const screens = {
+    overview: lazy(() => import('./lib/components/load/OverviewScreen.svelte')),
+    nodes: lazy(() => import('./lib/components/nodes/NodesScreen.svelte')),
+    'node-detail': lazy(() => import('./lib/components/nodes/NodeDetailScreen.svelte')),
+    jobs: lazy(() => import('./lib/components/jobs/JobsScreen.svelte')),
+    'job-detail': lazy(() => import('./lib/components/jobs/JobDetailScreen.svelte')),
+    'job-run': lazy(() => import('./lib/components/jobs/JobRunScreen.svelte')),
+    apps: lazy(() => import('./lib/components/apps/AppsScreen.svelte')),
+    settings: lazy(() => import('./lib/components/SettingsScreen.svelte')),
+  }
 
   const clusters = createClustersStore()
   const toasts = toastState()
@@ -33,6 +45,7 @@
 
   onMount(() => {
     void clusters.refresh()
+    void clusters.discover()
   })
 
   // 集群切换（或启动时已有 activeID）：清空旧数据并首拉负载/节点/job。
@@ -107,12 +120,24 @@
       tls: info.tls,
       insecureSkipVerify: info.insecureSkipVerify,
       token: '',
+      useEnvToken: false,
     }
   }
 
   async function handleRemove(id: string): Promise<void> {
     confirmRemove = null
     await clusters.removeCluster(id)
+  }
+
+  // 一键导入（M2.2）：服务端读 NOMAD_*，token 不经前端往返。
+  async function handleImportFromEnv(): Promise<void> {
+    const res = await clusters.importFromEnv(t('discover.importName'))
+    if (res.ok) {
+      toast({
+        level: 'success',
+        message: t('discover.imported', { name: res.info.name || res.info.id }),
+      })
+    }
   }
 </script>
 
@@ -191,6 +216,44 @@
                 <span
                   role="button"
                   tabindex="0"
+                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline {c.pinned
+                    ? 'text-amber-400'
+                    : ''}"
+                  title={t(c.pinned ? 'cluster.unpin' : 'cluster.pin')}
+                  onclick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    void clusters.pinCluster(c.id, !c.pinned)
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      void clusters.pinCluster(c.id, !c.pinned)
+                    }
+                  }}>{c.pinned ? '★' : '☆'}</span
+                >
+                <span
+                  role="button"
+                  tabindex="0"
+                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline"
+                  title={t('cluster.test')}
+                  onclick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    void clusters.testConnection(c.id)
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      void clusters.testConnection(c.id)
+                    }
+                  }}>⟳</span
+                >
+                <span
+                  role="button"
+                  tabindex="0"
                   class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline"
                   title={t('cluster.edit')}
                   onclick={(e) => {
@@ -228,6 +291,9 @@
                 {/if}
               </span>
             </button>
+            {#if c.pinned && clusters.state.clusters[clusters.state.clusters.indexOf(item) + 1]?.info.pinned === false}
+              <div class="my-1 border-t border-zinc-800"></div>
+            {/if}
           {/each}
         {/if}
       </div>
@@ -251,108 +317,140 @@
     <!-- Content：设置不依赖活跃集群（对标 Lens Preferences） -->
     <main class="flex min-w-0 flex-1 flex-col overflow-y-auto">
       {#if ui.route.page === 'settings'}
-        <SettingsScreen />
+        {#await screens.settings()}
+          <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+        {:then { default: Cmp }}
+          <Cmp />
+        {/await}
       {:else if active}
-        {#if ui.route.page === 'overview'}
-          <OverviewScreen
-            clusterName={active.info.name || active.info.id}
-            load={loads.state.cluster}
-            busy={loads.state.loading}
-            onRefresh={() => void loads.refresh(active.info.id)}
-            onSelectJob={(jobID) => ui.navigate('job-detail', { jobID })}
-          />
-        {:else if ui.route.page === 'nodes'}
-          <NodesScreen
-            nodes={nodes.list}
-            loads={loads.state.nodes}
-            busy={nodes.state.loading}
-            onRefresh={() => void nodes.refresh(active.info.id)}
-            onSelect={(nodeID) => ui.navigate('node-detail', { nodeID })}
-          />
-        {:else if ui.route.page === 'node-detail'}
-          <NodeDetailScreen
-            node={nodes.list.find((n) => n.id === ui.route.params.nodeID) ?? null}
-            load={loads.state.nodes.get(ui.route.params.nodeID) ?? null}
-            allocs={[...loads.state.allocs.values()].filter(
-              (a) => a.nodeID === ui.route.params.nodeID,
-            )}
-            onBack={() => ui.navigate('nodes')}
-          />
-        {:else if ui.route.page === 'jobs'}
-          <JobsScreen
-            jobs={jobs.list}
-            loading={jobs.state.loading}
-            busy={jobs.state.busyOp !== null}
-            onRefresh={() => void jobs.refresh(active.info.id)}
-            onSelect={(jobID) => ui.navigate('job-detail', { jobID })}
-            onDeleteMany={(ids) => jobs.stopMany(active.info.id, ids, true)}
-          />
-        {:else if ui.route.page === 'job-detail'}
-          <JobDetailScreen
-            detail={jobs.state.detail}
-            allocs={jobs.state.detailAllocs}
-            loading={jobs.state.detailLoading}
-            busyOp={jobs.state.busyOp}
-            clusterID={active.info.id}
-            deployEvalID={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
-              ? (jobs.state.lastDeploy?.evalID ?? '')
-              : (ui.route.params.evalID ?? '')}
-            deployWarnings={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
-              ? (jobs.state.lastDeploy?.warnings ?? '')
-              : ''}
-            showDeployProgress={ui.route.params.deploy === '1' ||
-              (jobs.state.lastDeploy?.jobID === ui.route.params.jobID &&
-                !!jobs.state.lastDeploy?.evalID)}
-            onBack={() => {
-              jobs.clearLastDeploy()
-              ui.navigate('jobs')
-            }}
-            onRefresh={() => jobs.reloadDetail(active.info.id)}
-            onEvaluate={(jobID) => jobs.evaluate(active.info.id, jobID)}
-            onStop={(jobID, purge) => jobs.stop(active.info.id, jobID, purge)}
-            onScale={(jobID, group, count) => jobs.scale(active.info.id, jobID, group, count)}
-            onRestartAlloc={(allocID, taskName) =>
-              jobs.restartAlloc(active.info.id, allocID, taskName)}
-            onStopAlloc={(allocID) => jobs.stopAlloc(active.info.id, allocID)}
-            onFetchEval={(evalID) => jobs.getEvaluation(active.info.id, evalID)}
-            onLoadEvents={(allocID) => jobs.listAllocEvents(active.info.id, allocID)}
-            onLoadLogs={(allocID, task, logType) =>
-              jobs.getAllocLogs(active.info.id, allocID, task, logType)}
-          />
-        {:else if ui.route.page === 'apps'}
-          <AppsScreen
-            busy={jobs.state.busyOp !== null}
-            selectedId={ui.route.params.appID ?? null}
-            existingJobIDs={jobs.list.map((j) => j.id)}
-            onSelect={(appID) => ui.navigate('apps', appID ? { appID } : {})}
-            onCustomize={(appID) => ui.navigate('job-run', { app: appID })}
-            onRun={(input) => jobs.runJob(active.info.id, input)}
-            onDone={(jobID) =>
-              ui.navigate('job-detail', {
-                jobID,
-                deploy: '1',
-                evalID: jobs.state.lastDeploy?.evalID ?? '',
-              })}
-          />
-        {:else if ui.route.page === 'job-run'}
-          <JobRunScreen
-            busy={jobs.state.busyOp !== null}
-            presetAppId={ui.route.params.app ?? null}
-            existingJobIDs={jobs.list.map((j) => j.id)}
-            onRun={(input) => jobs.runJob(active.info.id, input)}
-            onDone={(jobID) =>
-              ui.navigate('job-detail', {
-                jobID,
-                deploy: '1',
-                evalID: jobs.state.lastDeploy?.evalID ?? '',
-              })}
-            onBrowseApps={() => ui.navigate('apps')}
-          />
-        {:else}
+        {#if ui.route.page === 'allocs'}
           <section class="mx-auto w-full max-w-4xl p-6">
             <h1 class="text-lg font-semibold">{t('nav.allocs')}</h1>
             <p class="mt-8 text-xs text-zinc-600">{t('app.allocsPlaceholder')}</p>
           </section>
+        {:else if ui.route.page === 'overview'}
+          {#await screens.overview()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              clusterName={active.info.name || active.info.id}
+              load={loads.state.cluster}
+              busy={loads.state.loading}
+              onRefresh={() => void loads.refresh(active.info.id)}
+              onSelectJob={(jobID) => ui.navigate('job-detail', { jobID })}
+            />
+          {/await}
+        {:else if ui.route.page === 'nodes'}
+          {#await screens.nodes()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              nodes={nodes.list}
+              loads={loads.state.nodes}
+              busy={nodes.state.loading}
+              onRefresh={() => void nodes.refresh(active.info.id)}
+              onSelect={(nodeID) => ui.navigate('node-detail', { nodeID })}
+            />
+          {/await}
+        {:else if ui.route.page === 'node-detail'}
+          {#await screens['node-detail']()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              node={nodes.list.find((n) => n.id === ui.route.params.nodeID) ?? null}
+              load={loads.state.nodes.get(ui.route.params.nodeID) ?? null}
+              allocs={[...loads.state.allocs.values()].filter(
+                (a) => a.nodeID === ui.route.params.nodeID,
+              )}
+              onBack={() => ui.navigate('nodes')}
+            />
+          {/await}
+        {:else if ui.route.page === 'jobs'}
+          {#await screens.jobs()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              jobs={jobs.list}
+              loading={jobs.state.loading}
+              busy={jobs.state.busyOp !== null}
+              onRefresh={() => void jobs.refresh(active.info.id)}
+              onSelect={(jobID) => ui.navigate('job-detail', { jobID })}
+              onDeleteMany={(ids) => jobs.stopMany(active.info.id, ids, true)}
+            />
+          {/await}
+        {:else if ui.route.page === 'job-detail'}
+          {#await screens['job-detail']()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              detail={jobs.state.detail}
+              allocs={jobs.state.detailAllocs}
+              loading={jobs.state.detailLoading}
+              busyOp={jobs.state.busyOp}
+              clusterID={active.info.id}
+              deployEvalID={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
+                ? (jobs.state.lastDeploy?.evalID ?? '')
+                : (ui.route.params.evalID ?? '')}
+              deployWarnings={jobs.state.lastDeploy?.jobID === ui.route.params.jobID
+                ? (jobs.state.lastDeploy?.warnings ?? '')
+                : ''}
+              showDeployProgress={ui.route.params.deploy === '1' ||
+                (jobs.state.lastDeploy?.jobID === ui.route.params.jobID &&
+                  !!jobs.state.lastDeploy?.evalID)}
+              onBack={() => {
+                jobs.clearLastDeploy()
+                ui.navigate('jobs')
+              }}
+              onRefresh={() => jobs.reloadDetail(active.info.id)}
+              onEvaluate={(jobID) => jobs.evaluate(active.info.id, jobID)}
+              onStop={(jobID, purge) => jobs.stop(active.info.id, jobID, purge)}
+              onScale={(jobID, group, count) => jobs.scale(active.info.id, jobID, group, count)}
+              onRestartAlloc={(allocID, taskName) =>
+                jobs.restartAlloc(active.info.id, allocID, taskName)}
+              onStopAlloc={(allocID) => jobs.stopAlloc(active.info.id, allocID)}
+              onFetchEval={(evalID) => jobs.getEvaluation(active.info.id, evalID)}
+              onLoadEvents={(allocID) => jobs.listAllocEvents(active.info.id, allocID)}
+              onLoadLogs={(allocID, task, logType) =>
+                jobs.getAllocLogs(active.info.id, allocID, task, logType)}
+            />
+          {/await}
+        {:else if ui.route.page === 'apps'}
+          {#await screens.apps()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              busy={jobs.state.busyOp !== null}
+              selectedId={ui.route.params.appID ?? null}
+              existingJobIDs={jobs.list.map((j) => j.id)}
+              onSelect={(appID) => ui.navigate('apps', appID ? { appID } : {})}
+              onCustomize={(appID) => ui.navigate('job-run', { app: appID })}
+              onRun={(input) => jobs.runJob(active.info.id, input)}
+              onDone={(jobID) =>
+                ui.navigate('job-detail', {
+                  jobID,
+                  deploy: '1',
+                  evalID: jobs.state.lastDeploy?.evalID ?? '',
+                })}
+            />
+          {/await}
+        {:else if ui.route.page === 'job-run'}
+          {#await screens['job-run']()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              busy={jobs.state.busyOp !== null}
+              presetAppId={ui.route.params.app ?? null}
+              existingJobIDs={jobs.list.map((j) => j.id)}
+              onRun={(input) => jobs.runJob(active.info.id, input)}
+              onDone={(jobID) =>
+                ui.navigate('job-detail', {
+                  jobID,
+                  deploy: '1',
+                  evalID: jobs.state.lastDeploy?.evalID ?? '',
+                })}
+              onBrowseApps={() => ui.navigate('apps')}
+            />
+          {/await}
         {/if}
       {:else}
         <div class="flex flex-1 items-center justify-center text-zinc-500">
@@ -360,12 +458,25 @@
             <div class="text-sm font-medium text-zinc-400">
               {t('app.connectedEmpty')}
             </div>
-            <button
-              class="mt-4 rounded bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white"
-              onclick={() => (showAddDialog = true)}
-            >
-              {t('app.addCluster')}
-            </button>
+            <div class="mt-4 flex items-center justify-center gap-2">
+              <button
+                class="rounded bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white"
+                onclick={() => (showAddDialog = true)}
+              >
+                {t('app.addCluster')}
+              </button>
+              {#if clusters.state.discovered && clusters.state.discovered.length > 0}
+                <button
+                  class="rounded border border-zinc-600 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                  onclick={() => void handleImportFromEnv()}
+                >
+                  {t('discover.importFromEnv')}
+                </button>
+              {/if}
+            </div>
+            {#if clusters.state.discovered && clusters.state.discovered.length === 0}
+              <div class="mt-3 text-xs text-zinc-600">{t('discover.noEnv')}</div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -417,7 +528,12 @@
   {/if}
 
   {#if showAddDialog}
-    <AddClusterDialog mode="add" onSubmit={onAdd} onClose={() => (showAddDialog = false)} />
+    <AddClusterDialog
+      mode="add"
+      discovered={clusters.state.discovered ?? []}
+      onSubmit={onAdd}
+      onClose={() => (showAddDialog = false)}
+    />
   {/if}
   {#if editTarget}
     <AddClusterDialog

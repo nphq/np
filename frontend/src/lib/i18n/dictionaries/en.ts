@@ -179,6 +179,18 @@ const en = {
   'cluster.removeBody': '"{name}" and its stored keychain token will be removed.',
   'cluster.remove': 'Remove',
   'cluster.edit': 'Edit',
+  'cluster.pin': 'Pin',
+  'cluster.unpin': 'Unpin',
+
+  'discover.importFromEnv': 'Import from environment',
+  'discover.imported': 'Imported from environment and connected: {name}',
+  'discover.noEnv': 'No NOMAD_ADDR detected — set the env vars to enable one-click import.',
+  'discover.fillFromEnv': 'Fill from environment',
+  'discover.fillFromEnvTitle':
+    'Pre-fill from NOMAD_*; token is read server-side (never into the input)',
+  'discover.importName': 'From environment',
+  'discover.usingEnvToken':
+    'Will use the token from the environment (read server-side on Test/Save)',
 
   'overview.polling': '15s polling · capacity / allocated / used · CPU MHz · memory & disk MB',
   'overview.used': 'used',

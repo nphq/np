@@ -20,6 +20,10 @@ type ClusterConfig struct {
 	TLS       bool   `json:"tls"`
 	// InsecureSkipVerify 仅用于自签证书的开发集群，默认 false
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+	// Pinned 表示收藏/置顶；排序规则见 uiapi.ListClusters（Pinned 在前，
+	// 组内按 SortOrder → Name → ID）。此结构仅持久化，不负责排序。
+	Pinned    bool `json:"pinned,omitempty"`
+	SortOrder int  `json:"sortOrder,omitempty"`
 }
 
 var (

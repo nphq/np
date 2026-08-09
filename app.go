@@ -28,10 +28,16 @@ func NewApp() *App {
 	if err := cfg.Load(); err != nil {
 		fmt.Println("WARN: load config:", err)
 	}
-	clusters := uiapi.NewClusterService(cfg, secure.New())
+	prefs := config.NewPrefs(config.MustPrefsPath())
+	if err := prefs.Load(); err != nil {
+		fmt.Println("WARN: load prefs:", err)
+	}
+	clusters := uiapi.NewClusterService(cfg, prefs, secure.New())
 	loads := uiapi.NewLoadsService(clusters.Pool())
 	// 负载 Collector 跟随激活集群启停
 	clusters.OnActiveChanged = loads.Activate
+	// 恢复上次活跃集群（prefs 有值且集群仍存在时触发 OnActiveChanged → Loads 拉数）
+	clusters.RestoreActive()
 	return &App{
 		clusters: clusters,
 		jobs:     uiapi.NewJobsService(clusters.Pool()),
@@ -125,6 +131,41 @@ func (a *App) SetActiveCluster(clusterID string) (any, error) {
 		return e, nil
 	}
 	return nil, nil
+}
+
+// PinCluster 置顶/取消置顶集群（收藏）。
+func (a *App) PinCluster(clusterID string, pinned bool) (any, error) {
+	if e := a.clusters.PinCluster(clusterID, pinned); e != nil {
+		return e, nil
+	}
+	return nil, nil
+}
+
+// DiscoverClusters 探测本机可用连接候选（环境变量/常见配置）。
+func (a *App) DiscoverClusters() (any, error) {
+	list, e := a.clusters.DiscoverClusters()
+	if e != nil {
+		return e, nil
+	}
+	return list, nil
+}
+
+// ImportFromEnv 从 NOMAD_* 环境变量一键导入并激活集群。
+func (a *App) ImportFromEnv(name string) (any, error) {
+	info, e := a.clusters.ImportFromEnv(name)
+	if e != nil {
+		return e, nil
+	}
+	return info, nil
+}
+
+// ImportClusterJSON 导入与 ClusterConfig 同形的 JSON（数组或单对象）。
+func (a *App) ImportClusterJSON(raw string) (any, error) {
+	info, e := a.clusters.ImportClusterJSON(raw)
+	if e != nil {
+		return e, nil
+	}
+	return info, nil
 }
 
 // --- jobs ---

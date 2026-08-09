@@ -18,9 +18,13 @@ Built with **Wails v3 + Go + Svelte 5 + TypeScript**, designed to be fast, keybo
 ## Requirements
 
 - **Go** ≥ 1.26
-- **Bun** ≥ 1.3 (the only package manager used; do not use npm)
+- **Bun** ≥ 1.3 — the **only** JS toolchain: package manager, Vite build, linters and tests all run under Bun. Node.js is **not** required (CI and lefthook use `bun` exclusively; verified with a Node-free `PATH`).
 - **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4`
 - A **Nomad** cluster (≥ 2.0; verified against `hashicorp/nomad:2.0.4`)
+
+> Frontend bundle: routes are code-split — only the screen you open is loaded. The
+> CodeMirror editor (~300 KB) is fetched lazily when entering the Run Job page;
+> the entry chunk is ~147 KB (gzip ~49 KB).
 
 ## Getting Started
 
@@ -50,6 +54,25 @@ docker compose up -d
 ```
 
 Then open the app, click **Add Cluster**, and point it at `http://127.0.0.1:4646`.
+
+### Connecting: one-click import from environment
+
+If the standard Nomad CLI environment variables are set, the app discovers them and offers **Import from environment** in the empty state (or **Fill from environment** inside the Add dialog). The active cluster is remembered across restarts, and newly added clusters are activated automatically.
+
+| Env var | Maps to |
+| --- | --- |
+| `NOMAD_ADDR` | Address (scheme optional, defaults to `http://`) |
+| `NOMAD_TOKEN` | ACL token — stored in the OS keychain only, never in config files |
+| `NOMAD_REGION` | Region |
+| `NOMAD_NAMESPACE` | Namespace |
+| `NOMAD_SKIP_VERIFY` | `true`/`1`/`yes` → HTTPS + skip TLS verification |
+
+```bash
+export NOMAD_ADDR=http://127.0.0.1:4646
+# optional: export NOMAD_TOKEN=... NOMAD_REGION=global
+```
+
+The token never travels to the frontend: import happens server-side in one step. File-based CA (`NOMAD_CACERT`) is not supported yet. You can also pin (star) clusters to the top of the sidebar — the order is preserved across restarts.
 
 ## Deploying non-container (native) jobs
 
