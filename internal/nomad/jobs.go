@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -39,8 +40,8 @@ func uint64Deref(p *uint64) uint64 {
 // ListJobs 拉取 job 列表并映射为 []JobSummary。
 // 每个 stub 的运行态计数来自 JobSummary.Summary（按 task group 聚合）；
 // nil JobSummary（periodic / parameterized 罕见情况）返回零计数。
-func ListJobs(client *api.Client) ([]JobSummary, error) {
-	stubs, _, err := client.Jobs().List(nil)
+func ListJobs(ctx context.Context, client *api.Client) ([]JobSummary, error) {
+	stubs, _, err := client.Jobs().List((&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
@@ -74,13 +75,13 @@ func mapJobListStub(s *api.JobListStub) JobSummary {
 // GetJob 拉取单个 job 详情，包含 HCL 定义的 task groups 与对应运行态汇总。
 // 内部两次 API：Info 拿 job 定义 + task group 期望 count，Summary 拿运行态计数。
 // Summary 失败不致命：返回 detail 但 TaskGroups 各状态字段为 0。
-func GetJob(client *api.Client, jobID string) (*JobDetail, error) {
-	job, _, err := client.Jobs().Info(jobID, nil)
+func GetJob(ctx context.Context, client *api.Client, jobID string) (*JobDetail, error) {
+	job, _, err := client.Jobs().Info(jobID, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("get job %s: %w", jobID, err)
 	}
 	summary := map[string]api.TaskGroupSummary{}
-	if js, _, sErr := client.Jobs().Summary(jobID, nil); sErr == nil && js != nil {
+	if js, _, sErr := client.Jobs().Summary(jobID, (&api.QueryOptions{}).WithContext(ctx)); sErr == nil && js != nil {
 		summary = js.Summary
 	}
 	return mapJobDetail(job, summary), nil
@@ -136,8 +137,8 @@ func mapJobDetail(job *api.Job, summary map[string]api.TaskGroupSummary) *JobDet
 
 // ListJobAllocations 拉取 job 下的分配列表。
 // allAllocs=false：只返回最近一次 evaluation 的 allocs（不含历史 replacement）。
-func ListJobAllocations(client *api.Client, jobID string) ([]AllocSummary, error) {
-	allocs, _, err := client.Jobs().Allocations(jobID, false, nil)
+func ListJobAllocations(ctx context.Context, client *api.Client, jobID string) ([]AllocSummary, error) {
+	allocs, _, err := client.Jobs().Allocations(jobID, false, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list allocations for job %s: %w", jobID, err)
 	}
@@ -163,6 +164,9 @@ func ListJobAllocations(client *api.Client, jobID string) ([]AllocSummary, error
 // ParseJobSpec 把用户提交的规格文本解析为 api.Job。
 // format ∈ {"hcl", "json"}：hcl 走服务端 ParseHCL（含 canonicalize）；
 // json 走本地 json.Unmarshal（字段名与 SDK Go 字段对齐，即 /v1/jobs/parse 输出）。
+//
+// 注：SDK 的 ParseHCL/ParseHCLOpts 不接收 Query/WriteOptions（ctx 无法下沉），
+// 本函数刻意不带 ctx 参数；其它走 options 的调用全部透传 ctx。
 func ParseJobSpec(client *api.Client, spec, format string, canonicalize bool) (*api.Job, error) {
 	switch strings.ToLower(format) {
 	case "hcl":
@@ -186,8 +190,8 @@ func ParseJobSpec(client *api.Client, spec, format string, canonicalize bool) (*
 }
 
 // ValidateJob 请求服务端校验 job，返回校验结果 DTO。
-func ValidateJob(client *api.Client, job *api.Job) (JobValidateResult, error) {
-	resp, _, err := client.Jobs().Validate(job, nil)
+func ValidateJob(ctx context.Context, client *api.Client, job *api.Job) (JobValidateResult, error) {
+	resp, _, err := client.Jobs().Validate(job, (&api.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return JobValidateResult{}, fmt.Errorf("validate job: %w", err)
 	}
@@ -200,10 +204,12 @@ func ValidateJob(client *api.Client, job *api.Job) (JobValidateResult, error) {
 
 // RegisterJob 提交/更新 job（PUT /v1/jobs），返回回执。
 // namespace 非空时覆盖集群默认 namespace。
-func RegisterJob(client *api.Client, job *api.Job, namespace string) (JobRunResult, error) {
+func RegisterJob(ctx context.Context, client *api.Client, job *api.Job, namespace string) (JobRunResult, error) {
 	var wq *api.WriteOptions
 	if namespace != "" {
-		wq = &api.WriteOptions{Namespace: namespace}
+		wq = (&api.WriteOptions{Namespace: namespace}).WithContext(ctx)
+	} else {
+		wq = (&api.WriteOptions{}).WithContext(ctx)
 	}
 	resp, _, err := client.Jobs().Register(job, wq)
 	if err != nil {
@@ -218,8 +224,8 @@ func RegisterJob(client *api.Client, job *api.Job, namespace string) (JobRunResu
 }
 
 // DeregisterJob 停止 job（purge=true 同时清除历史记录），返回 EvalID。
-func DeregisterJob(client *api.Client, jobID string, purge bool) (string, error) {
-	evalID, _, err := client.Jobs().Deregister(jobID, purge, nil)
+func DeregisterJob(ctx context.Context, client *api.Client, jobID string, purge bool) (string, error) {
+	evalID, _, err := client.Jobs().Deregister(jobID, purge, (&api.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("deregister job %s: %w", jobID, err)
 	}
@@ -227,8 +233,8 @@ func DeregisterJob(client *api.Client, jobID string, purge bool) (string, error)
 }
 
 // ForceEvaluateJob 强制重新评估 job，返回 EvalID。
-func ForceEvaluateJob(client *api.Client, jobID string) (string, error) {
-	evalID, _, err := client.Jobs().ForceEvaluate(jobID, nil)
+func ForceEvaluateJob(ctx context.Context, client *api.Client, jobID string) (string, error) {
+	evalID, _, err := client.Jobs().ForceEvaluate(jobID, (&api.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("force evaluate job %s: %w", jobID, err)
 	}
@@ -236,8 +242,8 @@ func ForceEvaluateJob(client *api.Client, jobID string) (string, error) {
 }
 
 // ScaleJob 对 task group 扩缩容（PUT /v1/job/{id}/scale），返回 EvalID。
-func ScaleJob(client *api.Client, jobID, group string, count int) (string, error) {
-	resp, _, err := client.Jobs().Scale(jobID, group, &count, "scaled from Nomad Panel", false, nil, nil)
+func ScaleJob(ctx context.Context, client *api.Client, jobID, group string, count int) (string, error) {
+	resp, _, err := client.Jobs().Scale(jobID, group, &count, "scaled from Nomad Panel", false, nil, (&api.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("scale job %s group %s: %w", jobID, group, err)
 	}
@@ -245,18 +251,18 @@ func ScaleJob(client *api.Client, jobID, group string, count int) (string, error
 }
 
 // RestartAlloc 重启 alloc 的全部任务或指定任务（taskName 为空=全部）。
-func RestartAlloc(client *api.Client, allocID, taskName string) error {
+func RestartAlloc(ctx context.Context, client *api.Client, allocID, taskName string) error {
 	alloc := &api.Allocation{ID: allocID}
-	if err := client.Allocations().Restart(alloc, taskName, nil); err != nil {
+	if err := client.Allocations().Restart(alloc, taskName, (&api.QueryOptions{}).WithContext(ctx)); err != nil {
 		return fmt.Errorf("restart alloc %s: %w", allocID, err)
 	}
 	return nil
 }
 
 // StopAlloc 停止 alloc（触发 reschedule 评估），无 EvalID 返回。
-func StopAlloc(client *api.Client, allocID string) error {
+func StopAlloc(ctx context.Context, client *api.Client, allocID string) error {
 	alloc := &api.Allocation{ID: allocID}
-	if _, err := client.Allocations().Stop(alloc, nil); err != nil {
+	if _, err := client.Allocations().Stop(alloc, (&api.QueryOptions{}).WithContext(ctx)); err != nil {
 		return fmt.Errorf("stop alloc %s: %w", allocID, err)
 	}
 	return nil

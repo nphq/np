@@ -27,7 +27,9 @@ tasks:
       - cmd: rm -f *.syso
         platforms: [linux, darwin]
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      # 生产构建注入版本号（review.md 任务一 1.3.2）；默认 dev。
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui -X github.com/nphq/np/internal/version.Version={{.VERSION}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      VERSION: '{{.VERSION | default "dev"}}'
     env:
       GOOS: windows
       # Windows WebView2 不需要 CGO；便于在非 Windows 主机交叉编译 .exe
@@ -41,6 +43,14 @@ tasks:
       - task: create:nsis:installer
         vars:
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
+
+  # 签名（review.md 1.3.5）：WINDOWS_CERT_PFX 未配置时跳过，不影响开发/CI。
+  sign:
+    summary: Signs bin/np.exe with signtool + PFX (skipped when WINDOWS_CERT_PFX unset)
+    platforms: [windows]
+    cmds:
+      - 'powershell -Command "if (-not $env:WINDOWS_CERT_PFX) { Write-Host ''skip sign: WINDOWS_CERT_PFX not set''; exit 0 }; $env:WINDOWS_CERT_PFX | Out-File -Encoding ASCII cert.pfx; signtool sign /f cert.pfx /p $env:WINDOWS_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 ''bin\np.exe''; Remove-Item cert.pfx"'
 
   generate:syso:
     summary: Generates Windows `.syso` file (icon + version info + manifest)
@@ -58,7 +68,11 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
+      - task: sign
+        vars:
+          VERSION: '{{.VERSION}}'
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       - makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
     vars:

@@ -48,9 +48,11 @@
     void clusters.discover()
   })
 
-  // 集群切换（或启动时已有 activeID）：清空旧数据并首拉负载/节点/job。
+  // 集群切换 / 同 ID 再激活（ImportFromEnv）：清空旧数据并首拉负载/节点/job。
   $effect(() => {
     const id = clusters.state.activeID
+    const _epoch = clusters.state.activeEpoch
+    void _epoch
     loads.clear()
     nodes.clear()
     jobs.clear()

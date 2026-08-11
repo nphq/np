@@ -545,3 +545,63 @@ func TestE2E_AddClusterRejectsInvalidInput(t *testing.T) {
 		t.Fatalf("duplicate add: want %q, got %+v", uiapi.CodeDuplicate, e)
 	}
 }
+
+// 11. TestE2E_RunJob_HCL 覆盖用户最高频操作：HCL 提交 → 校验 → 注册。
+// server-only 集群没有 client，调度必然 placement-failed，但注册回执与
+// EvalID 必须非空（这正是 UI 部署进度的起点）。
+func TestE2E_RunJob_HCL(t *testing.T) {
+	_, svc := connectCluster(t)
+	jobs := uiapi.NewJobsService(svc.Pool())
+	ctx := context.Background()
+
+	res, e := jobs.RunJob(ctx, "dev", `job "e2e-demo" {
+  datacenters = ["dc1"]
+  type = "batch"
+  group "web" {
+    count = 1
+    task "echo" {
+      driver = "raw_exec"
+      config {
+        command = "/bin/echo"
+        args = ["hello"]
+      }
+    }
+  }
+}`, "hcl", "", true)
+	if e != nil {
+		t.Fatalf("RunJob: %v", e)
+	}
+	if res.JobID != "e2e-demo" || res.EvalID == "" {
+		t.Fatalf("RunJob result = %+v (want EvalID non-empty)", res)
+	}
+
+	// 列表可见
+	list, e := jobs.ListJobs(ctx, "dev")
+	if e != nil {
+		t.Fatalf("ListJobs: %v", e)
+	}
+	found := false
+	for _, j := range list {
+		if j.ID == "e2e-demo" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("job e2e-demo not in ListJobs: %+v", list)
+	}
+
+	// 详情可查（定义 + task groups）
+	detail, e := jobs.GetJob(ctx, "dev", "e2e-demo")
+	if e != nil {
+		t.Fatalf("GetJob: %v", e)
+	}
+	if detail.ID != "e2e-demo" || len(detail.TaskGroups) != 1 {
+		t.Fatalf("GetJob = %+v", detail)
+	}
+
+	// 停止并 purge 清理，验证停止链路
+	if _, e := jobs.StopJob(ctx, "dev", "e2e-demo", true); e != nil {
+		t.Fatalf("StopJob: %v", e)
+	}
+}

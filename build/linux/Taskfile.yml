@@ -20,7 +20,9 @@ tasks:
             ref: .PRODUCTION
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      # 生产构建注入版本号（review.md 任务一 1.3.2）；默认 dev。
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -X github.com/nphq/np/internal/version.Version={{.VERSION}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      VERSION: '{{.VERSION | default "dev"}}'
     env:
       GOOS: linux
       CGO_ENABLED: 1
@@ -34,11 +36,20 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
       - task: create:appimage
+        vars:
+          VERSION: '{{.VERSION | default "dev"}}'
       - task: create:deb
+        vars:
+          VERSION: '{{.VERSION | default "dev"}}'
       - task: create:rpm
+        vars:
+          VERSION: '{{.VERSION | default "dev"}}'
       - task: create:aur
+        vars:
+          VERSION: '{{.VERSION | default "dev"}}'
 
   create:appimage:
     summary: Creates an AppImage
@@ -48,6 +59,7 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
       - task: generate:dotdesktop
     cmds:
       - cp {{.APP_BINARY}} {{.APP_NAME}}
@@ -67,6 +79,7 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
       - task: generate:dotdesktop
       - task: generate:deb
@@ -78,6 +91,7 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
       - task: generate:dotdesktop
       - task: generate:rpm
@@ -89,6 +103,7 @@ tasks:
         vars:
           PRODUCTION: "true"
           ARCH: '{{.ARCH}}'
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
       - task: generate:dotdesktop
       - task: generate:aur

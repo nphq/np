@@ -9,6 +9,7 @@ import (
 	"github.com/nphq/np/internal/config"
 	"github.com/nphq/np/internal/secure"
 	"github.com/nphq/np/internal/uiapi"
+	"github.com/nphq/np/internal/version"
 )
 
 // App 承载全部 Wails bound methods（薄层，转调 uiapi）。
@@ -71,6 +72,10 @@ func (a *App) ServiceShutdown() error {
 // 这是 Wails dispatcher 的妥协：它对返回值做 `.(error)` 类型断言，命中就当
 // error 处理；nil *uiapi.Error 是 typed-nil，断言拿到非 nil 接口，后续 .Error()
 // 调用即使用 nil-safe 实现也会把成功路径误判为错误。把错误塞 data 槽绕开此问题。
+//
+// ctx 注入：v3 的 bound method 首参为 context.Context 时由运行时注入
+// （needsContext），并自动透传到 SDK 调用（QueryOptions.WithContext），
+// 使 IPC 请求受 app 生命周期 ctx 约束。
 
 // --- clusters ---
 
@@ -171,8 +176,8 @@ func (a *App) ImportClusterJSON(raw string) (any, error) {
 // --- jobs ---
 
 // ListJobs 返回集群下的全部 job 摘要。
-func (a *App) ListJobs(clusterID string) (any, error) {
-	jobs, e := a.jobs.ListJobs(clusterID)
+func (a *App) ListJobs(ctx context.Context, clusterID string) (any, error) {
+	jobs, e := a.jobs.ListJobs(ctx, clusterID)
 	if e != nil {
 		return e, nil
 	}
@@ -180,8 +185,8 @@ func (a *App) ListJobs(clusterID string) (any, error) {
 }
 
 // GetJob 返回单个 job 详情。
-func (a *App) GetJob(clusterID, jobID string) (any, error) {
-	detail, e := a.jobs.GetJob(clusterID, jobID)
+func (a *App) GetJob(ctx context.Context, clusterID, jobID string) (any, error) {
+	detail, e := a.jobs.GetJob(ctx, clusterID, jobID)
 	if e != nil {
 		return e, nil
 	}
@@ -189,8 +194,8 @@ func (a *App) GetJob(clusterID, jobID string) (any, error) {
 }
 
 // ListJobAllocations 返回 job 下的 allocation 列表。
-func (a *App) ListJobAllocations(clusterID, jobID string) (any, error) {
-	allocs, e := a.jobs.ListJobAllocations(clusterID, jobID)
+func (a *App) ListJobAllocations(ctx context.Context, clusterID, jobID string) (any, error) {
+	allocs, e := a.jobs.ListJobAllocations(ctx, clusterID, jobID)
 	if e != nil {
 		return e, nil
 	}
@@ -198,8 +203,8 @@ func (a *App) ListJobAllocations(clusterID, jobID string) (any, error) {
 }
 
 // RunJob 部署/更新 job（Parse → Validate → Register）。
-func (a *App) RunJob(clusterID, spec, format, namespace string, canonicalize bool) (any, error) {
-	res, e := a.jobs.RunJob(clusterID, spec, format, namespace, canonicalize)
+func (a *App) RunJob(ctx context.Context, clusterID, spec, format, namespace string, canonicalize bool) (any, error) {
+	res, e := a.jobs.RunJob(ctx, clusterID, spec, format, namespace, canonicalize)
 	if e != nil {
 		return e, nil
 	}
@@ -207,8 +212,8 @@ func (a *App) RunJob(clusterID, spec, format, namespace string, canonicalize boo
 }
 
 // StopJob 停止 job（purge=true 清除历史记录），返回 EvalID。
-func (a *App) StopJob(clusterID, jobID string, purge bool) (any, error) {
-	evalID, e := a.jobs.StopJob(clusterID, jobID, purge)
+func (a *App) StopJob(ctx context.Context, clusterID, jobID string, purge bool) (any, error) {
+	evalID, e := a.jobs.StopJob(ctx, clusterID, jobID, purge)
 	if e != nil {
 		return e, nil
 	}
@@ -216,8 +221,8 @@ func (a *App) StopJob(clusterID, jobID string, purge bool) (any, error) {
 }
 
 // EvaluateJob 强制重新评估 job，返回 EvalID。
-func (a *App) EvaluateJob(clusterID, jobID string) (any, error) {
-	evalID, e := a.jobs.EvaluateJob(clusterID, jobID)
+func (a *App) EvaluateJob(ctx context.Context, clusterID, jobID string) (any, error) {
+	evalID, e := a.jobs.EvaluateJob(ctx, clusterID, jobID)
 	if e != nil {
 		return e, nil
 	}
@@ -225,8 +230,8 @@ func (a *App) EvaluateJob(clusterID, jobID string) (any, error) {
 }
 
 // ScaleJob 对 task group 扩缩容，返回 EvalID。
-func (a *App) ScaleJob(clusterID, jobID, group string, count int) (any, error) {
-	evalID, e := a.jobs.ScaleJob(clusterID, jobID, group, count)
+func (a *App) ScaleJob(ctx context.Context, clusterID, jobID, group string, count int) (any, error) {
+	evalID, e := a.jobs.ScaleJob(ctx, clusterID, jobID, group, count)
 	if e != nil {
 		return e, nil
 	}
@@ -234,24 +239,24 @@ func (a *App) ScaleJob(clusterID, jobID, group string, count int) (any, error) {
 }
 
 // RestartAlloc 重启 alloc 的任务（taskName 空=全部）。
-func (a *App) RestartAlloc(clusterID, allocID, taskName string) (any, error) {
-	if e := a.jobs.RestartAlloc(clusterID, allocID, taskName); e != nil {
+func (a *App) RestartAlloc(ctx context.Context, clusterID, allocID, taskName string) (any, error) {
+	if e := a.jobs.RestartAlloc(ctx, clusterID, allocID, taskName); e != nil {
 		return e, nil
 	}
 	return nil, nil
 }
 
 // StopAlloc 停止 alloc。
-func (a *App) StopAlloc(clusterID, allocID string) (any, error) {
-	if e := a.jobs.StopAlloc(clusterID, allocID); e != nil {
+func (a *App) StopAlloc(ctx context.Context, clusterID, allocID string) (any, error) {
+	if e := a.jobs.StopAlloc(ctx, clusterID, allocID); e != nil {
 		return e, nil
 	}
 	return nil, nil
 }
 
 // GetEvaluation 返回评估状态（部署进度）。
-func (a *App) GetEvaluation(clusterID, evalID string) (any, error) {
-	info, e := a.jobs.GetEvaluation(clusterID, evalID)
+func (a *App) GetEvaluation(ctx context.Context, clusterID, evalID string) (any, error) {
+	info, e := a.jobs.GetEvaluation(ctx, clusterID, evalID)
 	if e != nil {
 		return e, nil
 	}
@@ -259,8 +264,8 @@ func (a *App) GetEvaluation(clusterID, evalID string) (any, error) {
 }
 
 // ListAllocTaskEvents 返回 alloc 任务事件时间线。
-func (a *App) ListAllocTaskEvents(clusterID, allocID string) (any, error) {
-	events, e := a.jobs.ListAllocTaskEvents(clusterID, allocID)
+func (a *App) ListAllocTaskEvents(ctx context.Context, clusterID, allocID string) (any, error) {
+	events, e := a.jobs.ListAllocTaskEvents(ctx, clusterID, allocID)
 	if e != nil {
 		return e, nil
 	}
@@ -268,8 +273,8 @@ func (a *App) ListAllocTaskEvents(clusterID, allocID string) (any, error) {
 }
 
 // GetAllocLogs 拉取 alloc 任务日志快照。
-func (a *App) GetAllocLogs(clusterID, allocID, task, logType string) (any, error) {
-	logs, e := a.jobs.GetAllocLogs(clusterID, allocID, task, logType)
+func (a *App) GetAllocLogs(ctx context.Context, clusterID, allocID, task, logType string) (any, error) {
+	logs, e := a.jobs.GetAllocLogs(ctx, clusterID, allocID, task, logType)
 	if e != nil {
 		return e, nil
 	}
@@ -279,8 +284,8 @@ func (a *App) GetAllocLogs(clusterID, allocID, task, logType string) (any, error
 // --- nodes ---
 
 // ListNodes 返回集群下的节点列表（容量 + 实时负载）。
-func (a *App) ListNodes(clusterID string) (any, error) {
-	nodes, e := a.nodes.ListNodes(clusterID)
+func (a *App) ListNodes(ctx context.Context, clusterID string) (any, error) {
+	nodes, e := a.nodes.ListNodes(ctx, clusterID)
 	if e != nil {
 		return e, nil
 	}
@@ -290,8 +295,8 @@ func (a *App) ListNodes(clusterID string) (any, error) {
 // --- loads ---
 
 // GetClusterLoad 返回集群负载聚合快照（Overview 页）。
-func (a *App) GetClusterLoad(clusterID string) (any, error) {
-	cl, e := a.loads.GetClusterLoad(clusterID)
+func (a *App) GetClusterLoad(ctx context.Context, clusterID string) (any, error) {
+	cl, e := a.loads.GetClusterLoad(ctx, clusterID)
 	if e != nil {
 		return e, nil
 	}
@@ -299,8 +304,8 @@ func (a *App) GetClusterLoad(clusterID string) (any, error) {
 }
 
 // GetNodeLoads 返回全部节点负载（Nodes 屏首拉）。
-func (a *App) GetNodeLoads(clusterID string) (any, error) {
-	nl, e := a.loads.GetNodeLoads(clusterID)
+func (a *App) GetNodeLoads(ctx context.Context, clusterID string) (any, error) {
+	nl, e := a.loads.GetNodeLoads(ctx, clusterID)
 	if e != nil {
 		return e, nil
 	}
@@ -308,10 +313,17 @@ func (a *App) GetNodeLoads(clusterID string) (any, error) {
 }
 
 // GetAllocLoad 返回单个 alloc 的 per-task 用量。
-func (a *App) GetAllocLoad(clusterID, allocID string) (any, error) {
-	al, e := a.loads.GetAllocLoad(clusterID, allocID)
+func (a *App) GetAllocLoad(ctx context.Context, clusterID, allocID string) (any, error) {
+	al, e := a.loads.GetAllocLoad(ctx, clusterID, allocID)
 	if e != nil {
 		return e, nil
 	}
 	return al, nil
+}
+
+// --- meta ---
+
+// GetVersion 返回构建时注入的版本号（未注入时为 "dev"）。
+func (a *App) GetVersion() (any, error) {
+	return version.Build(), nil
 }

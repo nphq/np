@@ -18,7 +18,9 @@ tasks:
             ref: .PRODUCTION
       - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      # 生产构建注入版本号（review.md 任务一 1.3.2）；默认 dev。
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -X github.com/nphq/np/internal/version.Version={{.VERSION}}"{{else}}-buildvcs=false -gcflags=all="-l"{{end}}'
+      VERSION: '{{.VERSION | default "dev"}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:
@@ -31,13 +33,34 @@ tasks:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
   package:
-    summary: Packages a production build into a `.app` bundle
+    summary: Packages a production build into a `.app` bundle (+ notarize if APPLE_ID set)
     deps:
       - task: build
         vars:
           PRODUCTION: "true"
+          VERSION: '{{.VERSION | default "dev"}}'
     cmds:
       - task: create:app:bundle
+      - task: notarize
+
+  # 公证（review.md 1.3.5）：无 APPLE_ID 时跳过（保留 ad-hoc 签名），开发不受影响。
+  notarize:
+    summary: Codesigns with Developer ID + notarizes the `.app` (skipped when APPLE_ID unset)
+    cmds:
+      - |
+        if [ -z "${APPLE_ID}" ]; then
+          echo "skip notarize: APPLE_ID not set"
+          exit 0
+        fi
+        if [ -n "${APPLE_DEVELOPER_ID}" ]; then
+          codesign --force --deep --sign "${APPLE_DEVELOPER_ID}" --options runtime {{.BIN_DIR}}/{{.APP_NAME}}.app
+        fi
+        ditto -c -k --keepParent {{.BIN_DIR}}/{{.APP_NAME}}.app {{.BIN_DIR}}/{{.APP_NAME}}.zip
+        xcrun notarytool submit {{.BIN_DIR}}/{{.APP_NAME}}.zip \
+          --apple-id "${APPLE_ID}" --password "${APPLE_APP_PASSWORD}" \
+          --team-id "${APPLE_TEAM_ID}" --wait
+        xcrun stapler staple {{.BIN_DIR}}/{{.APP_NAME}}.app
+        rm -f {{.BIN_DIR}}/{{.APP_NAME}}.zip
 
   create:app:bundle:
     summary: Creates an `.app` bundle

@@ -120,39 +120,41 @@ func (s *LoadsService) ensureCollector(clusterID string) *metrics.Collector {
 }
 
 // refreshSync 在缓存为空时同步跑一轮采集（首拉路径）。
-func (s *LoadsService) refreshSync(coll *metrics.Collector) {
+// ctx 来自调用方（Wails 注入的 app ctx），叠加 15s 超时兜底；
+// Tick 会把 ctx 一路透传到 SDK，超时真正生效。
+func (s *LoadsService) refreshSync(ctx context.Context, coll *metrics.Collector) {
 	if !coll.Cache().Empty() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	tctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	_ = coll.Tick(ctx)
+	_ = coll.Tick(tctx)
 }
 
 // GetClusterLoad 返回集群负载聚合快照（Overview 页）。
-func (s *LoadsService) GetClusterLoad(clusterID string) (*nomad.ClusterLoad, *Error) {
+func (s *LoadsService) GetClusterLoad(ctx context.Context, clusterID string) (*nomad.ClusterLoad, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
 	coll := s.ensureCollector(clusterID)
-	s.refreshSync(coll)
+	s.refreshSync(ctx, coll)
 	cl := coll.Cache().Snapshot()
 	return &cl, nil
 }
 
 // GetNodeLoads 返回全部节点负载（Nodes 屏首拉）。
-func (s *LoadsService) GetNodeLoads(clusterID string) ([]nomad.NodeLoad, *Error) {
+func (s *LoadsService) GetNodeLoads(ctx context.Context, clusterID string) ([]nomad.NodeLoad, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
 	coll := s.ensureCollector(clusterID)
-	s.refreshSync(coll)
+	s.refreshSync(ctx, coll)
 	return coll.Cache().NodeLoads(), nil
 }
 
 // GetAllocLoad 返回单个 alloc 的 per-task 用量（Job 详情页）。
 // 缓存未命中（alloc 非 running / 降级 / 尚未轮询到）返回 CodeNotFound。
-func (s *LoadsService) GetAllocLoad(clusterID, allocID string) (*nomad.AllocLoad, *Error) {
+func (s *LoadsService) GetAllocLoad(ctx context.Context, clusterID, allocID string) (*nomad.AllocLoad, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -160,7 +162,7 @@ func (s *LoadsService) GetAllocLoad(clusterID, allocID string) (*nomad.AllocLoad
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
 	coll := s.ensureCollector(clusterID)
-	s.refreshSync(coll)
+	s.refreshSync(ctx, coll)
 	if al, ok := coll.Cache().AllocLoad(allocID); ok {
 		return &al, nil
 	}
@@ -168,7 +170,8 @@ func (s *LoadsService) GetAllocLoad(clusterID, allocID string) (*nomad.AllocLoad
 }
 
 // NodeLoads 暴露缓存中的节点负载（供 NodesService 派生 NodeSummary）。
-func (s *LoadsService) NodeLoads(clusterID string) []nomad.NodeLoad {
+func (s *LoadsService) NodeLoads(ctx context.Context, clusterID string) []nomad.NodeLoad {
 	coll := s.ensureCollector(clusterID)
+	s.refreshSync(ctx, coll)
 	return coll.Cache().NodeLoads()
 }

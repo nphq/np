@@ -80,6 +80,13 @@ export function GetNodeLoads(clusterID: string): $CancellablePromise<any> {
 }
 
 /**
+ * GetVersion 返回构建时注入的版本号（未注入时为 "dev"）。
+ */
+export function GetVersion(): $CancellablePromise<any> {
+    return $Call.ByID(1049863377);
+}
+
+/**
  * ImportClusterJSON 导入与 ClusterConfig 同形的 JSON（数组或单对象）。
  */
 export function ImportClusterJSON(raw: string): $CancellablePromise<any> {

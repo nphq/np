@@ -2,7 +2,7 @@
 name: "np"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.1.0"
+version: "__VERSION__"
 section: "utils"
 priority: "optional"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>

@@ -1,6 +1,8 @@
 package uiapi
 
 import (
+	"context"
+
 	"github.com/nphq/np/internal/cluster"
 	"github.com/nphq/np/internal/nomad"
 )
@@ -19,7 +21,7 @@ func NewNodesService(pool *cluster.Pool, loads *LoadsService) *NodesService {
 }
 
 // ListNodes 返回集群下的节点列表（容量 + 实时负载）。
-func (s *NodesService) ListNodes(clusterID string) ([]nomad.NodeSummary, *Error) {
+func (s *NodesService) ListNodes(ctx context.Context, clusterID string) ([]nomad.NodeSummary, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -27,14 +29,14 @@ func (s *NodesService) ListNodes(clusterID string) ([]nomad.NodeSummary, *Error)
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	nodes, err := nomad.ListNodes(client)
+	nodes, err := nomad.ListNodes(ctx, client)
 	if err != nil {
 		return nil, Wrap(err)
 	}
 
 	// 用负载缓存补 used/allocated（缓存为空时保持 0，前端显示 loading）
 	byID := make(map[string]nomad.NodeLoad, len(nodes))
-	for _, nl := range s.loads.NodeLoads(clusterID) {
+	for _, nl := range s.loads.NodeLoads(ctx, clusterID) {
 		byID[nl.NodeID] = nl
 	}
 	for i := range nodes {

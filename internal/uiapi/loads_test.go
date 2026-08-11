@@ -1,6 +1,7 @@
 package uiapi
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,10 +13,10 @@ import (
 
 func TestLoadsServiceValidation(t *testing.T) {
 	svc := NewLoadsService(cluster.NewPool(config.New(t.TempDir()+"/c.json"), secure.NewMemory()))
-	if _, e := svc.GetClusterLoad("bad id!"); e == nil || e.Code != CodeInvalidInput {
+	if _, e := svc.GetClusterLoad(context.Background(), "bad id!"); e == nil || e.Code != CodeInvalidInput {
 		t.Fatalf("want invalid_input for bad cluster id, got %+v", e)
 	}
-	if _, e := svc.GetAllocLoad("ok", "bad id!"); e == nil || e.Code != CodeInvalidInput {
+	if _, e := svc.GetAllocLoad(context.Background(), "ok", "bad id!"); e == nil || e.Code != CodeInvalidInput {
 		t.Fatalf("want invalid_input for bad alloc id, got %+v", e)
 	}
 }
@@ -43,7 +44,7 @@ func TestLoadsServiceGetClusterLoad_SyncFirstPaint(t *testing.T) {
 	pool := cluster.NewPool(store, secure.NewMemory())
 	svc := NewLoadsService(pool)
 
-	cl, e := svc.GetClusterLoad("dev")
+	cl, e := svc.GetClusterLoad(context.Background(), "dev")
 	if e != nil {
 		t.Fatalf("GetClusterLoad: %v", e)
 	}
@@ -59,7 +60,7 @@ func TestLoadsServiceGetClusterLoad_SyncFirstPaint(t *testing.T) {
 
 	// 二次调用走缓存（同步 tick 不再触发网络）
 	before := len(cl.Samples)
-	cl2, e := svc.GetClusterLoad("dev")
+	cl2, e := svc.GetClusterLoad(context.Background(), "dev")
 	if e != nil {
 		t.Fatal(e)
 	}

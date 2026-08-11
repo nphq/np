@@ -90,10 +90,12 @@ func (c *Config) applyDefaults() {
 }
 
 // LoadPatch 是 load.patch 事件的 payload（仅含变化的节点/alloc + 集群聚合）。
+// ClusterID 供前端在激活集群切换后过滤旧集群的迟到事件（epoch guard）。
 type LoadPatch struct {
-	Nodes   []nomad.NodeLoad  `json:"nodes"`
-	Allocs  []nomad.AllocLoad `json:"allocs"`
-	Cluster nomad.ClusterLoad `json:"cluster"`
+	ClusterID string            `json:"clusterID"`
+	Nodes     []nomad.NodeLoad  `json:"nodes"`
+	Allocs    []nomad.AllocLoad `json:"allocs"`
+	Cluster   nomad.ClusterLoad `json:"cluster"`
 }
 
 // NewCollector 创建 Collector。emit 可为 nil（无事件推送，纯缓存）。
@@ -155,18 +157,19 @@ func (c *Collector) Stop() {
 func (c *Collector) Cache() *Cache { return c.cache }
 
 // Tick 跑一轮采集并 emit 变化。供周期循环与同步刷新（GetClusterLoad 首拉）共用。
-func (c *Collector) Tick(_ context.Context) error {
+// ctx 会一路透传到 SDK 调用（QueryOptions.WithContext），保证超时/取消生效。
+func (c *Collector) Tick(ctx context.Context) error {
 	c.tickMu.Lock()
 	defer c.tickMu.Unlock()
 	client, err := c.get()
 	if err != nil {
 		return err
 	}
-	nodes, err := nomad.ListNodes(client)
+	nodes, err := nomad.ListNodes(ctx, client)
 	if err != nil {
 		return fmt.Errorf("load: list nodes: %w", err)
 	}
-	allocs, err := nomad.ListAllocations(client)
+	allocs, err := nomad.ListAllocations(ctx, client)
 	if err != nil {
 		return fmt.Errorf("load: list allocations: %w", err)
 	}
@@ -211,7 +214,7 @@ func (c *Collector) Tick(_ context.Context) error {
 	hosts := make(map[string]*nomad.NodeStats, len(nodeIDs))
 	var hmu sync.Mutex
 	runParallel(nodeIDs, c.cfg.NodeConcurrency, func(id string) {
-		st, err := nomad.FetchNodeStats(client, id)
+		st, err := nomad.FetchNodeStats(ctx, client, id)
 		hmu.Lock()
 		defer hmu.Unlock()
 		if err != nil {
@@ -241,7 +244,7 @@ func (c *Collector) Tick(_ context.Context) error {
 	allocStats := make(map[string]*nomad.AllocStats, len(shardAllocs))
 	var amu sync.Mutex
 	runParallel(shardAllocs, c.cfg.AllocConcurrency, func(a nomad.AllocSummary) {
-		st, err := nomad.FetchAllocStats(client, a.ID)
+		st, err := nomad.FetchAllocStats(ctx, client, a.ID)
 		amu.Lock()
 		defer amu.Unlock()
 		if err != nil {
@@ -301,6 +304,7 @@ func (c *Collector) Tick(_ context.Context) error {
 
 	// 更新 cache + diff → patch
 	patch := c.cache.Update(nodeLoads, allocLoads, allocLevel)
+	patch.ClusterID = c.cfg.ClusterID
 	patch.Cluster = c.cache.Snapshot()
 	if c.emit != nil {
 		c.emit(patch)

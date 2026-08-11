@@ -10,6 +10,10 @@ vars:
   APP_NAME: "np"
   BIN_DIR: "bin"
   VITE_PORT: '{{.WAILS_VITE_PORT | default 5173}}'
+  # 版本号单一来源（review.md 任务一）：默认 dev；CI/本地打包时从 git tag
+  # 或命令行传入（VERSION=vX.Y.Z wails3 package）。渲染进 build 资产与
+  # -ldflags 的 -X ...version.Version。
+  VERSION: '{{.VERSION | default "dev"}}'
 
 tasks:
   build:
@@ -20,7 +24,14 @@ tasks:
   package:
     summary: Packages a production build of the application
     cmds:
+      # 先渲染 __VERSION__ 占位符（config.yml/plists/nfpm/nsh），
+      # 再走平台 package（内部 ldflags 注入同一 VERSION）。
+      - task: common:render:version
+        vars:
+          VERSION: '{{.VERSION}}'
       - task: "{{OS}}:package"
+        vars:
+          VERSION: '{{.VERSION}}'
 
   run:
     summary: Runs the application
@@ -47,6 +58,6 @@ tasks:
       - bun run check
 
   test:
-    summary: Run Go unit tests (excludes frontend/)
+    summary: Run Go unit tests with -race (excludes frontend/)
     cmds:
-      - go test $(go list ./... | grep -v '/frontend/')
+      - go test -race $(go list ./... | grep -v '/frontend/')

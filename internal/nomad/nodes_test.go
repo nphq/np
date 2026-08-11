@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -117,7 +118,7 @@ func TestListNodes_SendsResourcesParamAndMapsCapacity(t *testing.T) {
 		}}
 		_ = json.NewEncoder(w).Encode(stubs)
 	})
-	nodes, err := ListNodes(client)
+	nodes, err := ListNodes(context.Background(), client)
 	if err != nil {
 		t.Fatalf("ListNodes: %v", err)
 	}

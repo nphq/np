@@ -22,6 +22,7 @@ func init() {
 	application.RegisterBindingMethodID((*App).GetEvaluation, 1182632685)
 	application.RegisterBindingMethodID((*App).GetJob, 2134918486)
 	application.RegisterBindingMethodID((*App).GetNodeLoads, 3098263772)
+	application.RegisterBindingMethodID((*App).GetVersion, 1049863377)
 	application.RegisterBindingMethodID((*App).ImportClusterJSON, 3696937696)
 	application.RegisterBindingMethodID((*App).ImportFromEnv, 3269253331)
 	application.RegisterBindingMethodID((*App).ListAllocTaskEvents, 3845726050)

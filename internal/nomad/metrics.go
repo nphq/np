@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -43,8 +44,8 @@ type TaskStats struct {
 }
 
 // FetchNodeStats 拉取节点实时用量（每节点 1 调用，A1 源）。
-func FetchNodeStats(client *api.Client, nodeID string) (*NodeStats, error) {
-	hs, err := client.Nodes().Stats(nodeID, nil)
+func FetchNodeStats(ctx context.Context, client *api.Client, nodeID string) (*NodeStats, error) {
+	hs, err := client.Nodes().Stats(nodeID, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("node %s stats: %w", nodeID, err)
 	}
@@ -97,8 +98,8 @@ func diskUsedMiBFromMounts(stats []*api.HostDiskStats) float64 {
 }
 
 // FetchAllocStats 拉取 allocation 实时用量（每 alloc 1 调用，A2 源）。
-func FetchAllocStats(client *api.Client, allocID string) (*AllocStats, error) {
-	ar, err := client.Allocations().Stats(&api.Allocation{ID: allocID}, nil)
+func FetchAllocStats(ctx context.Context, client *api.Client, allocID string) (*AllocStats, error) {
+	ar, err := client.Allocations().Stats(&api.Allocation{ID: allocID}, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("alloc %s stats: %w", allocID, err)
 	}

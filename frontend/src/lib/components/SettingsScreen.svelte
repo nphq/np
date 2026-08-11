@@ -1,6 +1,8 @@
 <script lang="ts">
   // SettingsScreen —— 对标 Lens Preferences：应用 / 显示 / 关于。
+  import { onMount } from 'svelte'
   import { Browser } from '@wailsio/runtime'
+  import { GetVersion } from '../../../bindings/github.com/nphq/np/app'
   import { i18n, t } from '../i18n/index.svelte'
   import type { Locale } from '../i18n/index.svelte'
   import { appearance } from '../stores/appearance.svelte'
@@ -71,6 +73,18 @@
       window.open(url, '_blank', 'noopener,noreferrer')
     })
   }
+
+  // 版本号来自后端（-ldflags 注入的 internal/version.Version），默认 dev。
+  let appVersion = $state<string>('…')
+  onMount(() => {
+    GetVersion()
+      .then((v) => {
+        appVersion = v
+      })
+      .catch(() => {
+        appVersion = 'unknown'
+      })
+  })
 </script>
 
 <div class="flex h-full min-h-0 w-full">
@@ -190,7 +204,7 @@
         </div>
         <div class="flex justify-between gap-4 border-b border-zinc-800 pb-3">
           <dt class="text-zinc-500">{t('settings.about.version')}</dt>
-          <dd class="font-mono text-zinc-300">0.1.0</dd>
+          <dd class="font-mono text-zinc-300">{appVersion}</dd>
         </div>
       </dl>
 

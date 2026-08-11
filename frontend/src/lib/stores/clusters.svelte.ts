@@ -11,6 +11,7 @@ import {
 } from '../../../bindings/github.com/nphq/np/app'
 import { Events } from '@wailsio/runtime'
 import type { uiapi, nomad } from '../types/wails'
+import { createEpoch } from './epoch.svelte'
 
 export class ClusterInput {
   id: string = ''
@@ -38,6 +39,8 @@ export type ClustersState = {
   loading: boolean
   // 环境/文件发现候选（null = 尚未探测）。Discover 纯读、不含 token。
   discovered: uiapi.DiscoveredCluster[] | null
+  // 每次成功激活（含同 ID 再导入）递增，驱动工作负载强制重拉。
+  activeEpoch: number
 }
 
 interface ClusterHealthPayload {
@@ -55,11 +58,16 @@ function empty(): ClustersState {
     activeID: null,
     loading: false,
     discovered: null,
+    activeEpoch: 0,
   }
 }
 
 export function createClustersStore() {
   const state = $state<ClustersState>(empty())
+
+  // 集群切换（setActive）时作废所有在飞请求；refresh 自己 acquire 的 token
+  // 也会被后续 refresh 隐式作废（epoch 语义）。
+  const epoch = createEpoch()
 
   // 订阅后端 cluster.health 事件；payload 自带 clusterID。
   Events.On('cluster.health', (ev) => {
@@ -78,9 +86,11 @@ export function createClustersStore() {
   }
 
   async function refresh(): Promise<void> {
+    const mine = epoch.acquire()
     state.loading = true
     try {
       const res = await ListClusters()
+      if (!epoch.active(mine)) return // 被后续切换/刷新作废
       if (isErr(res)) {
         toastErr(res)
         return
@@ -90,8 +100,10 @@ export function createClustersStore() {
       // activeID 以服务端为准（含启动恢复 + 删除回退，前端不做本地双源）
       state.activeID = list.activeID || null
     } catch (err) {
-      console.error('[clusters] refresh failed:', err)
+      if (epoch.active(mine)) console.error('[clusters] refresh failed:', err)
     } finally {
+      // loading 属于 UI 信号：被更新请求作废的响应照常复位，
+      // 否则 setActive 等仅作废不重拉的场景会卡死 spinner。
       state.loading = false
     }
   }
@@ -125,6 +137,8 @@ export function createClustersStore() {
       }
       const info = res as nomad.ClusterInfo
       await refresh()
+      // 同 Address 再导入时 activeID 可能不变，仍需让 jobs/nodes/loads 重连。
+      state.activeEpoch++
       return { ok: true, info }
     } catch (err) {
       console.error('[clusters] importFromEnv failed:', err)
@@ -189,13 +203,20 @@ export function createClustersStore() {
   }
 
   async function setActive(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+    // acquire 会作废旧上下文的所有在飞 token（含旧集群的 refresh/操作），
+    // 并给自己发新 token：后来的切换自然覆盖先前的。
+    const mine = epoch.acquire()
     try {
       const err = await SetActiveCluster(id)
+      if (!epoch.active(mine)) return { ok: false, error: 'superseded by newer cluster switch' }
       if (isErr(err)) {
         toastErr(err)
         return { ok: false, error: (err as uiapi.Error).message }
       }
       state.activeID = id
+      state.activeEpoch++
+      // 上面的 acquire 已作废在飞 ListClusters；必须重拉，否则侧边栏可能空列表。
+      await refresh()
       return { ok: true }
     } catch (err) {
       console.error('[clusters] setActive failed:', err)

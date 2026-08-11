@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -244,7 +245,7 @@ func TestValidateJob(t *testing.T) {
 		_, _ = w.Write([]byte(`{"DriverConfigValidated":true,"ValidationErrors":["1 error occurred: task web: missing driver"],"Warnings":"deprecated field"}`))
 	})
 	job := &api.Job{ID: sp("demo")}
-	res, err := ValidateJob(client, job)
+	res, err := ValidateJob(context.Background(), client, job)
 	if err != nil {
 		t.Fatalf("ValidateJob: %v", err)
 	}
@@ -265,7 +266,7 @@ func TestRegisterJob(t *testing.T) {
 		_, _ = w.Write([]byte(`{"EvalID":"e1","JobModifyIndex":42,"Warnings":"none"}`))
 	})
 	job := &api.Job{ID: sp("demo")}
-	res, err := RegisterJob(client, job, "")
+	res, err := RegisterJob(context.Background(), client, job, "")
 	if err != nil {
 		t.Fatalf("RegisterJob: %v", err)
 	}
@@ -284,7 +285,7 @@ func TestDeregisterJob(t *testing.T) {
 		purgeQuery = r.URL.Query().Get("purge")
 		_, _ = w.Write([]byte(`{"EvalID":"e2"}`))
 	})
-	evalID, err := DeregisterJob(client, "demo", true)
+	evalID, err := DeregisterJob(context.Background(), client, "demo", true)
 	if err != nil {
 		t.Fatalf("DeregisterJob: %v", err)
 	}
@@ -301,7 +302,7 @@ func TestForceEvaluateJob(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"EvalID":"e3"}`))
 	})
-	evalID, err := ForceEvaluateJob(client, "demo")
+	evalID, err := ForceEvaluateJob(context.Background(), client, "demo")
 	if err != nil {
 		t.Fatalf("ForceEvaluateJob: %v", err)
 	}
@@ -334,7 +335,7 @@ func TestScaleJob(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"EvalID":"e4"}`))
 	})
-	evalID, err := ScaleJob(client, "demo", "web", 5)
+	evalID, err := ScaleJob(context.Background(), client, "demo", "web", 5)
 	if err != nil {
 		t.Fatalf("ScaleJob: %v", err)
 	}
@@ -354,7 +355,7 @@ func TestRestartAlloc(t *testing.T) {
 		task = req.TaskName
 		_, _ = w.Write([]byte(`{}`))
 	})
-	if err := RestartAlloc(client, "alloc-1", "web"); err != nil {
+	if err := RestartAlloc(context.Background(), client, "alloc-1", "web"); err != nil {
 		t.Fatalf("RestartAlloc: %v", err)
 	}
 	if path != "/v1/client/allocation/alloc-1/restart" || task != "web" {
@@ -368,7 +369,7 @@ func TestStopAlloc(t *testing.T) {
 		path = r.URL.Path
 		_, _ = w.Write([]byte(`{"EvalID":"e5"}`))
 	})
-	if err := StopAlloc(client, "alloc-1"); err != nil {
+	if err := StopAlloc(context.Background(), client, "alloc-1"); err != nil {
 		t.Fatalf("StopAlloc: %v", err)
 	}
 	if path != "/v1/allocation/alloc-1/stop" {

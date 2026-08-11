@@ -9,7 +9,7 @@ info:
   description: "Nomad cluster manager desktop app"
   copyright: "© 2026, Sphinx"
   comments: "Nomad Panel"
-  version: "0.1.0"
+  version: "__VERSION__"
 
 # `wails3 dev` 模式：监听 .go 改动 → 重启；前端由 vite dev server（5173）实时刷新。
 # 后端通过 FRONTEND_DEVSERVER_URL 环境变量（由 wails3 dev -port 注入）走代理到 vite。

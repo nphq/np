@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -9,12 +10,19 @@ import (
 	"github.com/hashicorp/nomad/api"
 )
 
+const (
+	// defaultLogTimeout 是 GetAllocLogs 的默认流超时（uiapi 层可覆盖）。
+	defaultLogTimeout = 8 * time.Second
+	// defaultLogMaxBytes 是日志快照的默认截断上限。
+	defaultLogMaxBytes = 64 * 1024
+)
+
 // GetEvaluation 查询评估状态（部署进度 / blocked 原因）。
-func GetEvaluation(client *api.Client, evalID string) (*EvalInfo, error) {
+func GetEvaluation(ctx context.Context, client *api.Client, evalID string) (*EvalInfo, error) {
 	if strings.TrimSpace(evalID) == "" {
 		return nil, fmt.Errorf("eval id is required")
 	}
-	ev, _, err := client.Evaluations().Info(evalID, nil)
+	ev, _, err := client.Evaluations().Info(evalID, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("get evaluation %s: %w", evalID, err)
 	}
@@ -58,8 +66,8 @@ func GetEvaluation(client *api.Client, evalID string) (*EvalInfo, error) {
 }
 
 // ListAllocTaskEvents 返回 alloc 各任务的近期事件（启动失败诊断）。
-func ListAllocTaskEvents(client *api.Client, allocID string) ([]AllocTaskEvent, error) {
-	alloc, _, err := client.Allocations().Info(allocID, nil)
+func ListAllocTaskEvents(ctx context.Context, client *api.Client, allocID string) ([]AllocTaskEvent, error) {
+	alloc, _, err := client.Allocations().Info(allocID, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("get alloc %s: %w", allocID, err)
 	}
@@ -102,26 +110,42 @@ func ListAllocTaskEvents(client *api.Client, allocID string) ([]AllocTaskEvent, 
 	return out, nil
 }
 
-const maxLogBytes = 64 * 1024
+// AllocLogsOpts 是 GetAllocLogs 的入参。Timeout/MaxBytes 为 0 时使用默认值。
+type AllocLogsOpts struct {
+	AllocID  string
+	Task     string
+	LogType  string
+	Timeout  time.Duration
+	MaxBytes int
+}
 
 // GetAllocLogs 拉取任务 stdout/stderr 快照（follow=false，从末尾向前）。
-func GetAllocLogs(client *api.Client, allocID, task, logType string) (*AllocLogsResult, error) {
-	if strings.TrimSpace(allocID) == "" {
+func GetAllocLogs(ctx context.Context, client *api.Client, opts AllocLogsOpts) (*AllocLogsResult, error) {
+	if strings.TrimSpace(opts.AllocID) == "" {
 		return nil, fmt.Errorf("alloc id is required")
 	}
-	logType = strings.ToLower(strings.TrimSpace(logType))
+	allocID := opts.AllocID
+	logType := strings.ToLower(strings.TrimSpace(opts.LogType))
 	if logType != "stdout" && logType != "stderr" {
 		logType = "stdout"
 	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = defaultLogTimeout
+	}
+	maxBytes := opts.MaxBytes
+	if maxBytes <= 0 {
+		maxBytes = defaultLogMaxBytes
+	}
 
-	alloc, _, err := client.Allocations().Info(allocID, nil)
+	alloc, _, err := client.Allocations().Info(allocID, (&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("get alloc %s: %w", allocID, err)
 	}
 	if alloc == nil {
 		return nil, fmt.Errorf("alloc %s not found", allocID)
 	}
-	task = strings.TrimSpace(task)
+	task := strings.TrimSpace(opts.Task)
 	if task == "" {
 		for name := range alloc.TaskStates {
 			task = name
@@ -150,15 +174,33 @@ func GetAllocLogs(client *api.Client, allocID, task, logType string) (*AllocLogs
 	stop := func() { once.Do(func() { close(cancel) }) }
 	defer stop()
 
-	frames, errs := client.AllocFS().Logs(alloc, false, task, logType, "end", int64(maxLogBytes), cancel, nil)
+	frames, errs := client.AllocFS().Logs(alloc, false, task, logType, "end", int64(maxBytes), cancel, (&api.QueryOptions{}).WithContext(ctx))
 
+	res, err := readLogs(logsSource{frames: frames, errs: errs}, maxBytes, time.After(timeout), stop)
+	if err != nil {
+		return nil, fmt.Errorf("alloc logs %s/%s: %w", allocID, task, err)
+	}
+	res.AllocID = allocID
+	res.Task = task
+	res.LogType = logType
+	return res, nil
+}
+
+// logsSource 抽象日志流的 frames/errs 通道，便于用普通 channel 单测 readLogs。
+type logsSource struct {
+	frames <-chan *api.StreamFrame
+	errs   <-chan error
+}
+
+// readLogs 从日志流读取结果。maxBytes 超限或 timeout 触发时置 Truncated；
+// stop 用于取消 SDK 侧流。errs 关闭（EOF）或收到非 nil 错误时终止读取。
+func readLogs(src logsSource, maxBytes int, timeout <-chan time.Time, stop func()) (*AllocLogsResult, error) {
 	var b strings.Builder
-	timeout := time.After(8 * time.Second)
 	truncated := false
 loop:
 	for {
 		select {
-		case fr, ok := <-frames:
+		case fr, ok := <-src.frames:
 			if !ok {
 				break loop
 			}
@@ -166,8 +208,8 @@ loop:
 				continue
 			}
 			if len(fr.Data) > 0 {
-				if b.Len()+len(fr.Data) > maxLogBytes {
-					remain := maxLogBytes - b.Len()
+				if b.Len()+len(fr.Data) > maxBytes {
+					remain := maxBytes - b.Len()
 					if remain > 0 {
 						b.Write(fr.Data[:remain])
 					}
@@ -177,22 +219,23 @@ loop:
 				}
 				b.Write(fr.Data)
 			}
-		case e := <-errs:
+		case e, ok := <-src.errs:
+			if !ok {
+				// errs 关闭（EOF 信号）：流结束，不再可能有错误。
+				break loop
+			}
 			if e != nil {
 				stop()
-				return nil, fmt.Errorf("alloc logs %s/%s: %w", allocID, task, e)
+				return nil, fmt.Errorf("stream error: %w", e)
 			}
+			// nil error：SDK 的同步刷新信号，继续读 frames。
 		case <-timeout:
 			stop()
 			truncated = true
 			break loop
 		}
 	}
-
 	return &AllocLogsResult{
-		AllocID:   allocID,
-		Task:      task,
-		LogType:   logType,
 		Content:   b.String(),
 		Truncated: truncated,
 	}, nil

@@ -19,7 +19,7 @@
 
 - **Go** ≥ 1.26
 - **Bun** ≥ 1.3 — 唯一的 JS 工具链：包管理、Vite 构建、lint 与测试全部跑在 Bun 下。**不需要 Node.js**（CI 与 lefthook 只用 `bun`；已在无 Node 的 PATH 下验证）。
-- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4`
+- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@$(cat build/WAILS_VERSION)`（当前 `v3.0.0-beta.6`；`build/WAILS_VERSION` 是版本单一来源，升级时同步改它）
 - **Nomad** 集群（≥ 2.0；已基于 `hashicorp/nomad:2.0.4` 验证）
 
 > 前端产物按路由拆包：只加载当前页面。CodeMirror 编辑器（约 300KB）进入「运行任务」页时才按需拉取；入口 chunk 约 147KB（gzip 约 49KB）。
@@ -132,7 +132,7 @@ cd frontend && bun run lint  # eslint
 
 ## 项目状态
 
-里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job、指标流水线、Job 管理、部署观测）。Darwin / Windows / Linux 构建与打包已通过 Wails Taskfile 支持（`wails3 build` / `wails3 package`）。当前依赖 **Wails v3.0.0-beta.4**。
+里程碑 M0–M3c 已完成（工程骨架、连接层、总览 / 节点 / Job、指标流水线、Job 管理、部署观测）。Darwin / Windows / Linux 构建与打包已通过 Wails Taskfile 支持（`wails3 build` / `wails3 package`）。当前依赖 **Wails v3.0.0-beta.6**。
 
 ## 贡献
 

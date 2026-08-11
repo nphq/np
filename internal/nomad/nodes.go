@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/hashicorp/nomad/api"
@@ -12,12 +13,12 @@ import (
 
 // ListNodes 拉取节点列表，填充容量与静态属性。used/allocated 由 metrics
 // Collector 侧补（见 internal/metrics 与 uiapi/nodes.go）。
-func ListNodes(client *api.Client) ([]NodeSummary, error) {
+func ListNodes(ctx context.Context, client *api.Client) ([]NodeSummary, error) {
 	// Nomad 2.x 的 /v1/nodes 列表端点默认不返回 NodeResources（重字段），
 	// 需显式传 ?resources=true 才带上容量（1.x 默认带）。
-	stubs, _, err := client.Nodes().List(&api.QueryOptions{
+	stubs, _, err := client.Nodes().List((&api.QueryOptions{
 		Params: map[string]string{"resources": "true"},
-	})
+	}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
@@ -49,8 +50,8 @@ func mapNodeListStub(n *api.NodeListStub) NodeSummary {
 
 // ListAllocations 拉取全量 allocation 列表（含 per-task 声明资源与节点归属）。
 // 供 metrics Collector 聚合 allocated 与 running allocs 使用。
-func ListAllocations(client *api.Client) ([]AllocSummary, error) {
-	stubs, _, err := client.Allocations().List(nil)
+func ListAllocations(ctx context.Context, client *api.Client) ([]AllocSummary, error) {
+	stubs, _, err := client.Allocations().List((&api.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list allocations: %w", err)
 	}

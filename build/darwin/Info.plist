@@ -12,11 +12,11 @@
         <key>CFBundleIdentifier</key>
         <string>com.wails.nomad-panel</string>
         <key>CFBundleVersion</key>
-        <string>0.1.0</string>
+        <string>__VERSION__</string>
         <key>CFBundleGetInfoString</key>
         <string>Nomad Panel</string>
         <key>CFBundleShortVersionString</key>
-        <string>0.1.0</string>
+        <string>__VERSION__</string>
         <!-- 资源文件名不含扩展名；打包时拷贝为 Resources/iconfile.icns -->
         <key>CFBundleIconFile</key>
         <string>iconfile</string>

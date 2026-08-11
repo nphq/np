@@ -1,10 +1,19 @@
 package uiapi
 
 import (
+	"context"
 	"strings"
+	"time"
 
 	"github.com/nphq/np/internal/cluster"
 	"github.com/nphq/np/internal/nomad"
+)
+
+const (
+	// defaultLogTimeout 是 GetAllocLogs 的流超时（SDK 侧同时受调用方 ctx 约束）。
+	defaultLogTimeout = 8 * time.Second
+	// defaultLogMaxBytes 是日志快照截断上限。
+	defaultLogMaxBytes = 64 * 1024
 )
 
 // JobsService 承载 jobs 相关的全部 IPC 逻辑（列表 / 详情 / allocations）。
@@ -20,7 +29,7 @@ func NewJobsService(pool *cluster.Pool) *JobsService {
 }
 
 // ListJobs 返回集群下的全部 job 摘要（首屏全量快照）。
-func (s *JobsService) ListJobs(clusterID string) ([]nomad.JobSummary, *Error) {
+func (s *JobsService) ListJobs(ctx context.Context, clusterID string) ([]nomad.JobSummary, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -28,7 +37,7 @@ func (s *JobsService) ListJobs(clusterID string) ([]nomad.JobSummary, *Error) {
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	jobs, err := nomad.ListJobs(client)
+	jobs, err := nomad.ListJobs(ctx, client)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -36,7 +45,7 @@ func (s *JobsService) ListJobs(clusterID string) ([]nomad.JobSummary, *Error) {
 }
 
 // GetJob 返回单个 job 详情（HCL 定义的 task groups + 运行态汇总）。
-func (s *JobsService) GetJob(clusterID, jobID string) (*nomad.JobDetail, *Error) {
+func (s *JobsService) GetJob(ctx context.Context, clusterID, jobID string) (*nomad.JobDetail, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -47,7 +56,7 @@ func (s *JobsService) GetJob(clusterID, jobID string) (*nomad.JobDetail, *Error)
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	detail, err := nomad.GetJob(client, jobID)
+	detail, err := nomad.GetJob(ctx, client, jobID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -56,7 +65,7 @@ func (s *JobsService) GetJob(clusterID, jobID string) (*nomad.JobDetail, *Error)
 
 // ListJobAllocations 返回 job 下的 allocation 列表。
 // allAllocs=false：不含历史 replacement（realloc 会以新 alloc 出现）。
-func (s *JobsService) ListJobAllocations(clusterID, jobID string) ([]nomad.AllocSummary, *Error) {
+func (s *JobsService) ListJobAllocations(ctx context.Context, clusterID, jobID string) ([]nomad.AllocSummary, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -67,7 +76,7 @@ func (s *JobsService) ListJobAllocations(clusterID, jobID string) ([]nomad.Alloc
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	allocs, err := nomad.ListJobAllocations(client, jobID)
+	allocs, err := nomad.ListJobAllocations(ctx, client, jobID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -80,7 +89,7 @@ const maxSpecBytes = 1 << 20
 // RunJob 部署（或更新）一个 job：Parse → Validate → Register。
 // format ∈ {"hcl", "json"}；namespace 为空时用集群默认 namespace。
 // 校验失败返回 CodeInvalidInput，message 携带全部校验错误（前端内联展示）。
-func (s *JobsService) RunJob(clusterID, spec, format, namespace string, canonicalize bool) (*nomad.JobRunResult, *Error) {
+func (s *JobsService) RunJob(ctx context.Context, clusterID, spec, format, namespace string, canonicalize bool) (*nomad.JobRunResult, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -106,14 +115,14 @@ func (s *JobsService) RunJob(clusterID, spec, format, namespace string, canonica
 	if err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
-	val, err := nomad.ValidateJob(client, job)
+	val, err := nomad.ValidateJob(ctx, client, job)
 	if err != nil {
 		return nil, Wrap(err)
 	}
 	if len(val.ValidationErrors) > 0 {
 		return nil, NewError(CodeInvalidInput, "job validation failed:\n%s", strings.Join(val.ValidationErrors, "\n"))
 	}
-	result, err := nomad.RegisterJob(client, job, namespace)
+	result, err := nomad.RegisterJob(ctx, client, job, namespace)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -121,7 +130,7 @@ func (s *JobsService) RunJob(clusterID, spec, format, namespace string, canonica
 }
 
 // StopJob 停止 job（purge=true 同时清除历史记录），返回 EvalID。
-func (s *JobsService) StopJob(clusterID, jobID string, purge bool) (string, *Error) {
+func (s *JobsService) StopJob(ctx context.Context, clusterID, jobID string, purge bool) (string, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return "", NewError(CodeInvalidInput, "%v", err)
 	}
@@ -132,7 +141,7 @@ func (s *JobsService) StopJob(clusterID, jobID string, purge bool) (string, *Err
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.DeregisterJob(client, jobID, purge)
+	evalID, err := nomad.DeregisterJob(ctx, client, jobID, purge)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -140,7 +149,7 @@ func (s *JobsService) StopJob(clusterID, jobID string, purge bool) (string, *Err
 }
 
 // EvaluateJob 强制重新评估 job，返回 EvalID。
-func (s *JobsService) EvaluateJob(clusterID, jobID string) (string, *Error) {
+func (s *JobsService) EvaluateJob(ctx context.Context, clusterID, jobID string) (string, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return "", NewError(CodeInvalidInput, "%v", err)
 	}
@@ -151,7 +160,7 @@ func (s *JobsService) EvaluateJob(clusterID, jobID string) (string, *Error) {
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.ForceEvaluateJob(client, jobID)
+	evalID, err := nomad.ForceEvaluateJob(ctx, client, jobID)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -159,7 +168,7 @@ func (s *JobsService) EvaluateJob(clusterID, jobID string) (string, *Error) {
 }
 
 // ScaleJob 对 task group 扩缩容，返回 EvalID。
-func (s *JobsService) ScaleJob(clusterID, jobID, group string, count int) (string, *Error) {
+func (s *JobsService) ScaleJob(ctx context.Context, clusterID, jobID, group string, count int) (string, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return "", NewError(CodeInvalidInput, "%v", err)
 	}
@@ -176,7 +185,7 @@ func (s *JobsService) ScaleJob(clusterID, jobID, group string, count int) (strin
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.ScaleJob(client, jobID, group, count)
+	evalID, err := nomad.ScaleJob(ctx, client, jobID, group, count)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -184,7 +193,7 @@ func (s *JobsService) ScaleJob(clusterID, jobID, group string, count int) (strin
 }
 
 // RestartAlloc 重启 alloc 的任务（taskName 空=全部任务）。
-func (s *JobsService) RestartAlloc(clusterID, allocID, taskName string) *Error {
+func (s *JobsService) RestartAlloc(ctx context.Context, clusterID, allocID, taskName string) *Error {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return NewError(CodeInvalidInput, "%v", err)
 	}
@@ -195,14 +204,14 @@ func (s *JobsService) RestartAlloc(clusterID, allocID, taskName string) *Error {
 	if err != nil {
 		return Wrap(err)
 	}
-	if err := nomad.RestartAlloc(client, allocID, taskName); err != nil {
+	if err := nomad.RestartAlloc(ctx, client, allocID, taskName); err != nil {
 		return Wrap(err)
 	}
 	return nil
 }
 
 // StopAlloc 停止 alloc（触发 reschedule 评估）。
-func (s *JobsService) StopAlloc(clusterID, allocID string) *Error {
+func (s *JobsService) StopAlloc(ctx context.Context, clusterID, allocID string) *Error {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return NewError(CodeInvalidInput, "%v", err)
 	}
@@ -213,14 +222,14 @@ func (s *JobsService) StopAlloc(clusterID, allocID string) *Error {
 	if err != nil {
 		return Wrap(err)
 	}
-	if err := nomad.StopAlloc(client, allocID); err != nil {
+	if err := nomad.StopAlloc(ctx, client, allocID); err != nil {
 		return Wrap(err)
 	}
 	return nil
 }
 
 // GetEvaluation 返回评估状态（部署进度）。
-func (s *JobsService) GetEvaluation(clusterID, evalID string) (*nomad.EvalInfo, *Error) {
+func (s *JobsService) GetEvaluation(ctx context.Context, clusterID, evalID string) (*nomad.EvalInfo, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -231,7 +240,7 @@ func (s *JobsService) GetEvaluation(clusterID, evalID string) (*nomad.EvalInfo, 
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	info, err := nomad.GetEvaluation(client, evalID)
+	info, err := nomad.GetEvaluation(ctx, client, evalID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -239,7 +248,7 @@ func (s *JobsService) GetEvaluation(clusterID, evalID string) (*nomad.EvalInfo, 
 }
 
 // ListAllocTaskEvents 返回 alloc 任务事件时间线。
-func (s *JobsService) ListAllocTaskEvents(clusterID, allocID string) ([]nomad.AllocTaskEvent, *Error) {
+func (s *JobsService) ListAllocTaskEvents(ctx context.Context, clusterID, allocID string) ([]nomad.AllocTaskEvent, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -250,7 +259,7 @@ func (s *JobsService) ListAllocTaskEvents(clusterID, allocID string) ([]nomad.Al
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	events, err := nomad.ListAllocTaskEvents(client, allocID)
+	events, err := nomad.ListAllocTaskEvents(ctx, client, allocID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -258,7 +267,7 @@ func (s *JobsService) ListAllocTaskEvents(clusterID, allocID string) ([]nomad.Al
 }
 
 // GetAllocLogs 拉取 alloc 任务日志快照（stdout/stderr）。
-func (s *JobsService) GetAllocLogs(clusterID, allocID, task, logType string) (*nomad.AllocLogsResult, *Error) {
+func (s *JobsService) GetAllocLogs(ctx context.Context, clusterID, allocID, task, logType string) (*nomad.AllocLogsResult, *Error) {
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
@@ -269,7 +278,13 @@ func (s *JobsService) GetAllocLogs(clusterID, allocID, task, logType string) (*n
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	logs, err := nomad.GetAllocLogs(client, allocID, task, logType)
+	logs, err := nomad.GetAllocLogs(ctx, client, nomad.AllocLogsOpts{
+		AllocID:  allocID,
+		Task:     task,
+		LogType:  logType,
+		Timeout:  defaultLogTimeout,
+		MaxBytes: defaultLogMaxBytes,
+	})
 	if err != nil {
 		return nil, Wrap(err)
 	}

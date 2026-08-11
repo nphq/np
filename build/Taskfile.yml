@@ -80,3 +80,30 @@ tasks:
     dir: build
     cmds:
       - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
+
+  render:version:
+    summary: Replaces __VERSION__ placeholders with the actual version in build assets
+    # 包装/发行前把版本号写进 config.yml + 各平台清单（Info.plist / nfpm / NSIS）。
+    # 打包完成后用 task common:restore:version 还原占位符（保持 git 干净）。
+    vars:
+      VERSION: '{{.VERSION | default "dev"}}'
+    cmds:
+      - sed -i.bak "s/__VERSION__/{{.VERSION}}/g" build/config.yml build/darwin/Info.plist build/darwin/Info.dev.plist build/windows/nsis/wails_tools.nsh build/linux/nfpm/nfpm.yaml
+      - find build -name "*.bak" -delete
+
+  restore:version:
+    summary: Restores __VERSION__ placeholders after packaging (git checkout)
+    cmds:
+      - git checkout -- build/config.yml build/darwin/Info.plist build/darwin/Info.dev.plist build/windows/nsis/wails_tools.nsh build/linux/nfpm/nfpm.yaml
+
+  regen-bindings:
+    summary: Regenerates Wails bindings + obfuscated IDs (run after Wails upgrade)
+    cmds:
+      - wails3 generate bindings -obfuscated ./... -clean=true -ts
+      - task: common:strip:obfuscated
+
+  strip:obfuscated:
+    summary: Strips the wails_obfuscated build tag (keeps binding IDs stable in plain builds)
+    internal: true
+    cmds:
+      - sed -i '' '/^\/\/go:build wails_obfuscated$/d' wails_obfuscated.gen.go
