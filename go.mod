@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/hashicorp/nomad/api v0.0.0-20260731161218-a8b881ca0829
-	github.com/wailsapp/wails/v3 v3.0.0-beta.6
+	github.com/wailsapp/wails/v3 v3.0.0-beta.7
 	github.com/zalando/go-keyring v0.2.8
 )
 
