@@ -1,4 +1,4 @@
-import { ListNodes } from '../../../bindings/github.com/nphq/np/app'
+import { ListNodes } from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { isErr, toastErr } from './clusters.svelte'
 import { createEpoch } from './epoch.svelte'
 import type { nomad } from '../types/wails'

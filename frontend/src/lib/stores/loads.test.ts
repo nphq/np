@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // 竞态防护测试（评审 P0-2）：loads store 的 refresh epoch guard +
 // load.patch 事件按 clusterID 过滤（切集群后旧集群的迟到 patch 不得合入）。
 
-vi.mock('../../../bindings/github.com/nphq/np/app', () => ({
+vi.mock('../../../bindings/github.com/nphq/np/internal/app/app', () => ({
   GetClusterLoad: vi.fn(),
   GetNodeLoads: vi.fn(),
 }))
@@ -12,7 +12,7 @@ vi.mock('@wailsio/runtime', () => ({
   Events: { On: vi.fn(), Off: vi.fn() },
 }))
 
-import * as app from '../../../bindings/github.com/nphq/np/app'
+import * as app from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { Events } from '@wailsio/runtime'
 import { createLoadsStore } from './loads.svelte'
 

@@ -5,6 +5,11 @@
  * App 承载全部 Wails bound methods（薄层，转调 uiapi）。
  * v3：实现 application.ServiceStartup / ServiceShutdown 接口，
  * 在 ServiceStartup 里通过 application.Get() 拿到 *application.App 引用注入给 service。
+ * 
+ * 注意：服务必须放在非 main 包。Wails v3 生成器对 package main 硬编码 FQN 前缀
+ * "main"，而运行时按 reflect.PkgPath()（模块路径）索引 —— 二者不一致会导致按名
+ * 分发（$Call.ByName）找不到方法。放在 internal/app 后两边都是
+ * "github.com/nphq/np/internal/app"（review P0-1）。
  * @module
  */
 
@@ -14,200 +19,193 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as uiapi$0 from "./internal/uiapi/models.js";
+import * as uiapi$0 from "../uiapi/models.js";
 
 /**
  * AddCluster 新增集群（token 只进 Keychain）。
  */
 export function AddCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-    return $Call.ByID(1297766566, $in);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.AddCluster", $in);
 }
 
 /**
  * DiscoverClusters 探测本机可用连接候选（环境变量/常见配置）。
  */
 export function DiscoverClusters(): $CancellablePromise<any> {
-    return $Call.ByID(1339163193);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.DiscoverClusters");
 }
 
 /**
  * EvaluateJob 强制重新评估 job，返回 EvalID。
  */
 export function EvaluateJob(clusterID: string, jobID: string): $CancellablePromise<any> {
-    return $Call.ByID(3390403861, clusterID, jobID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.EvaluateJob", clusterID, jobID);
 }
 
 /**
  * GetAllocLoad 返回单个 alloc 的 per-task 用量。
  */
 export function GetAllocLoad(clusterID: string, allocID: string): $CancellablePromise<any> {
-    return $Call.ByID(1987670824, clusterID, allocID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetAllocLoad", clusterID, allocID);
 }
 
 /**
  * GetAllocLogs 拉取 alloc 任务日志快照。
  */
 export function GetAllocLogs(clusterID: string, allocID: string, task: string, logType: string): $CancellablePromise<any> {
-    return $Call.ByID(1567936159, clusterID, allocID, task, logType);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetAllocLogs", clusterID, allocID, task, logType);
 }
 
 /**
  * GetClusterLoad 返回集群负载聚合快照（Overview 页）。
  */
 export function GetClusterLoad(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(2457669303, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetClusterLoad", clusterID);
 }
 
 /**
  * GetEvaluation 返回评估状态（部署进度）。
  */
 export function GetEvaluation(clusterID: string, evalID: string): $CancellablePromise<any> {
-    return $Call.ByID(1182632685, clusterID, evalID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetEvaluation", clusterID, evalID);
 }
 
 /**
  * GetJob 返回单个 job 详情。
  */
 export function GetJob(clusterID: string, jobID: string): $CancellablePromise<any> {
-    return $Call.ByID(2134918486, clusterID, jobID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetJob", clusterID, jobID);
 }
 
 /**
  * GetNodeLoads 返回全部节点负载（Nodes 屏首拉）。
  */
 export function GetNodeLoads(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(3098263772, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetNodeLoads", clusterID);
 }
 
 /**
  * GetVersion 返回构建时注入的版本号（未注入时为 "dev"）。
  */
 export function GetVersion(): $CancellablePromise<any> {
-    return $Call.ByID(1049863377);
-}
-
-/**
- * ImportClusterJSON 导入与 ClusterConfig 同形的 JSON（数组或单对象）。
- */
-export function ImportClusterJSON(raw: string): $CancellablePromise<any> {
-    return $Call.ByID(3696937696, raw);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetVersion");
 }
 
 /**
  * ImportFromEnv 从 NOMAD_* 环境变量一键导入并激活集群。
  */
 export function ImportFromEnv(name: string): $CancellablePromise<any> {
-    return $Call.ByID(3269253331, name);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ImportFromEnv", name);
 }
 
 /**
  * ListAllocTaskEvents 返回 alloc 任务事件时间线。
  */
 export function ListAllocTaskEvents(clusterID: string, allocID: string): $CancellablePromise<any> {
-    return $Call.ByID(3845726050, clusterID, allocID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListAllocTaskEvents", clusterID, allocID);
 }
 
 /**
  * ListClusters 返回全部集群及健康状态。
  */
 export function ListClusters(): $CancellablePromise<any> {
-    return $Call.ByID(2689603438);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListClusters");
 }
 
 /**
  * ListJobAllocations 返回 job 下的 allocation 列表。
  */
 export function ListJobAllocations(clusterID: string, jobID: string): $CancellablePromise<any> {
-    return $Call.ByID(2916105591, clusterID, jobID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListJobAllocations", clusterID, jobID);
 }
 
 /**
  * ListJobs 返回集群下的全部 job 摘要。
  */
 export function ListJobs(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(4257729417, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListJobs", clusterID);
 }
 
 /**
  * ListNodes 返回集群下的节点列表（容量 + 实时负载）。
  */
 export function ListNodes(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(3103789542, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListNodes", clusterID);
 }
 
 /**
  * PinCluster 置顶/取消置顶集群（收藏）。
  */
 export function PinCluster(clusterID: string, pinned: boolean): $CancellablePromise<any> {
-    return $Call.ByID(1873643878, clusterID, pinned);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.PinCluster", clusterID, pinned);
 }
 
 /**
  * RemoveCluster 删除集群。
  */
 export function RemoveCluster(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(624040237, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.RemoveCluster", clusterID);
 }
 
 /**
  * RestartAlloc 重启 alloc 的任务（taskName 空=全部）。
  */
 export function RestartAlloc(clusterID: string, allocID: string, taskName: string): $CancellablePromise<any> {
-    return $Call.ByID(78022057, clusterID, allocID, taskName);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.RestartAlloc", clusterID, allocID, taskName);
 }
 
 /**
  * RunJob 部署/更新 job（Parse → Validate → Register）。
  */
 export function RunJob(clusterID: string, spec: string, format: string, $namespace: string, canonicalize: boolean): $CancellablePromise<any> {
-    return $Call.ByID(3247404837, clusterID, spec, format, $namespace, canonicalize);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.RunJob", clusterID, spec, format, $namespace, canonicalize);
 }
 
 /**
  * ScaleJob 对 task group 扩缩容，返回 EvalID。
  */
 export function ScaleJob(clusterID: string, jobID: string, group: string, count: number): $CancellablePromise<any> {
-    return $Call.ByID(1691104880, clusterID, jobID, group, count);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ScaleJob", clusterID, jobID, group, count);
 }
 
 /**
  * SetActiveCluster 激活集群。
  */
 export function SetActiveCluster(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(4053701917, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.SetActiveCluster", clusterID);
 }
 
 /**
  * StopAlloc 停止 alloc。
  */
 export function StopAlloc(clusterID: string, allocID: string): $CancellablePromise<any> {
-    return $Call.ByID(455674126, clusterID, allocID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.StopAlloc", clusterID, allocID);
 }
 
 /**
  * StopJob 停止 job（purge=true 清除历史记录），返回 EvalID。
  */
 export function StopJob(clusterID: string, jobID: string, purge: boolean): $CancellablePromise<any> {
-    return $Call.ByID(1508425892, clusterID, jobID, purge);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.StopJob", clusterID, jobID, purge);
 }
 
 /**
  * TestConnection 手动探测连通性。
  */
 export function TestConnection(clusterID: string): $CancellablePromise<any> {
-    return $Call.ByID(1257240193, clusterID);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.TestConnection", clusterID);
 }
 
 /**
  * TestConnectionInput 用未落盘的入参探测连通性（添加前的 Test 按钮）。
  */
 export function TestConnectionInput($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-    return $Call.ByID(782476599, $in);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.TestConnectionInput", $in);
 }
 
 /**
  * UpdateCluster 编辑集群配置（token 空保留旧值）。
  */
 export function UpdateCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
-    return $Call.ByID(520897430, $in);
+    return $Call.ByName("github.com/nphq/np/internal/app.App.UpdateCluster", $in);
 }

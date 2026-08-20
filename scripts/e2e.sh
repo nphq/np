@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 运行 e2e 测试：通过 Docker 或本地 nomad 二进制拉起 hashicorp/nomad server，跑 internal/e2e。
 # 用法：
-#   scripts/e2e.sh             # 默认 hashicorp/nomad:2.0.4
+#   scripts/e2e.sh             # 默认 hashicorp/nomad:2.0.5
 #   NOMAD_IMAGE=hashicorp/nomad:1.9.4 scripts/e2e.sh
 #   scripts/e2e.sh -short      # 跳过真 Nomad 容器/进程启动，仅编译或跑基本测试
 set -euo pipefail
@@ -37,7 +37,7 @@ if [ "$short_mode" = "false" ]; then
     exit 1
   fi
 
-  export NOMAD_IMAGE="${NOMAD_IMAGE:-hashicorp/nomad:2.0.4}"
+  export NOMAD_IMAGE="${NOMAD_IMAGE:-hashicorp/nomad:2.0.5}"
 
   if [ "$has_docker" = "true" ]; then
     echo "==> Using Docker image: NOMAD_IMAGE=$NOMAD_IMAGE"

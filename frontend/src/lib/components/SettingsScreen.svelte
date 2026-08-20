@@ -2,7 +2,7 @@
   // SettingsScreen —— 对标 Lens Preferences：应用 / 显示 / 关于。
   import { onMount } from 'svelte'
   import { Browser } from '@wailsio/runtime'
-  import { GetVersion } from '../../../bindings/github.com/nphq/np/app'
+  import { GetVersion } from '../../../bindings/github.com/nphq/np/internal/app/app'
   import { i18n, t } from '../i18n/index.svelte'
   import type { Locale } from '../i18n/index.svelte'
   import { appearance } from '../stores/appearance.svelte'

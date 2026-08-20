@@ -8,7 +8,7 @@ import {
   DiscoverClusters,
   ImportFromEnv,
   TestConnection,
-} from '../../../bindings/github.com/nphq/np/app'
+} from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { Events } from '@wailsio/runtime'
 import type { uiapi, nomad } from '../types/wails'
 import { createEpoch } from './epoch.svelte'

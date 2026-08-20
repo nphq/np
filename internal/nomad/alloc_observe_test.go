@@ -249,3 +249,54 @@ func TestReadLogs_FrameThenError(t *testing.T) {
 		t.Errorf("err = %v, want stream closed by server", err)
 	}
 }
+
+// TestEvalFailedSummary_ConstraintReasons 验证调度失败摘要包含具体过滤原因
+// （ConstraintFiltered，如 "missing drivers"）而非只有计数 ——
+// 这是"coalescedFailures=1 nodesEvaluated=1 nodesFiltered=1"看不出原因的修复（review 定位）。
+func TestEvalFailedSummary_ConstraintReasons(t *testing.T) {
+	summary := evalFailedSummary(map[string]*api.AllocationMetric{
+		"web": {
+			NodesEvaluated:     1,
+			NodesFiltered:      1,
+			CoalescedFailures:  1,
+			ConstraintFiltered: map[string]int{"missing drivers": 1},
+		},
+	})
+	if !strings.Contains(summary, "web: missing drivers: 1") {
+		t.Fatalf("summary = %q, want constraint reason", summary)
+	}
+	if !strings.Contains(summary, "coalescedFailures=1 nodesEvaluated=1 nodesFiltered=1") {
+		t.Fatalf("summary = %q, want counts", summary)
+	}
+}
+
+// TestEvalFailedSummary_NoEligibleNodes 无过滤原因时保持原有"no eligible nodes"描述。
+func TestEvalFailedSummary_NoEligibleNodes(t *testing.T) {
+	summary := evalFailedSummary(map[string]*api.AllocationMetric{
+		"web": {NodesEvaluated: 2, NodesFiltered: 2},
+	})
+	want := "web: no eligible nodes (evaluated=2 filtered=2)"
+	if summary != want {
+		t.Fatalf("summary = %q, want %q", summary, want)
+	}
+}
+
+// TestEvalFailedSummary_Mixed 覆盖节点类过滤与 nil metric 两个分支，且输出确定性排序。
+func TestEvalFailedSummary_Mixed(t *testing.T) {
+	summary := evalFailedSummary(map[string]*api.AllocationMetric{
+		"db": {ClassFiltered: map[string]int{"highmem": 1}},
+		"x":  nil,
+	})
+	if !strings.Contains(summary, "node class highmem: 1") {
+		t.Fatalf("summary = %q, want node class reason", summary)
+	}
+	if !strings.Contains(summary, "x: placement failed") {
+		t.Fatalf("summary = %q, want nil metric fallback", summary)
+	}
+	if summary != evalFailedSummary(map[string]*api.AllocationMetric{
+		"x":  nil,
+		"db": {ClassFiltered: map[string]int{"highmem": 1}},
+	}) {
+		t.Fatalf("summary not deterministic: %q", summary)
+	}
+}

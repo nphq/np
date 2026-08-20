@@ -8,12 +8,8 @@ const en = {
   'common.confirm': 'Confirm',
   'common.working': 'Working…',
   'common.loading': 'Loading…',
-  'common.back': 'Back',
   'common.na': 'n/a',
-  'common.save': 'Save',
   'common.saving': 'Saving…',
-  'common.filter': 'Filter',
-  'common.search': 'Search',
   'confirm.typeToConfirm': 'Type “{phrase}” to confirm',
   'confirm.fillPhrase': 'Fill in {phrase}',
 
@@ -195,7 +191,6 @@ const en = {
   'overview.polling': '15s polling · capacity / allocated / used · CPU MHz · memory & disk MB',
   'overview.used': 'used',
   'overview.allocated': 'allocated',
-  'overview.capacity': 'capacity',
   'overview.collecting': 'Collecting load data…',
   'overview.noDataYet': 'No load data yet — waiting for the first poll.',
   'overview.nodes': 'Nodes',
@@ -243,7 +238,6 @@ const en = {
   'jobs.col.queued': 'Queued',
   'jobs.col.pending': 'Pending',
   'jobs.col.failed': 'Failed',
-  'jobs.col.dead': 'Dead',
   'jobs.col.type': 'Type',
   'jobs.col.priority': 'Priority',
   'jobs.selectPage': 'Select page',
@@ -305,6 +299,10 @@ const en = {
   'deploy.settled': 'Settled',
   'deploy.failedHint':
     'Placement or startup failed. Open Alloc Logs for task events and stdout/stderr.',
+  'deploy.placementHint':
+    'Placement failed: no node met the requirements (e.g. missing driver or unmet constraint), so no allocation was created and there are no logs to inspect yet. Check the reason above.',
+  'deploy.retryingHint':
+    'Placement not successful yet — Nomad is waiting for capacity and retrying automatically (blocked eval).',
   'deploy.phase.submitted': 'Submitted',
   'deploy.phase.evaluating': 'Evaluating',
   'deploy.phase.placing': 'Placing',
@@ -383,7 +381,6 @@ const en = {
   'runJob.err.envLines': 'Some env lines could not be parsed (need KEY=value)',
   'runJob.err.namespace': 'Invalid namespace (no spaces or / \\)',
   'runJob.err.specRequired': 'Job spec is required',
-  'runJob.tpl.hint': 'Browse curated apps from the Apps sidebar.',
   'runJob.tpl.openApps': 'Browse Apps →',
   'runJob.confirmTitle': 'Submit this job?',
   'runJob.confirmBodyForm':

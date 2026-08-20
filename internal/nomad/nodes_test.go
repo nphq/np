@@ -109,7 +109,7 @@ func TestListNodes_SendsResourcesParamAndMapsCapacity(t *testing.T) {
 			Status:                "ready",
 			SchedulingEligibility: "eligible",
 			Datacenter:            "dc1",
-			Version:               "2.0.4",
+			Version:               "2.0.5",
 			NodeResources: &api.NodeResources{
 				Cpu:    api.NodeCpuResources{CpuShares: 31200, TotalCpuCores: 12},
 				Memory: api.NodeMemoryResources{MemoryMB: 32768},

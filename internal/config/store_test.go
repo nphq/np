@@ -144,7 +144,67 @@ func TestDefaultDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(filepath.Base(dir)) != "nomad-manager" {
+	if filepath.Base(filepath.Base(dir)) != "np" {
 		t.Fatalf("unexpected default dir: %s", dir)
+	}
+}
+
+// TestDefaultDirMigratesLegacy 验证旧版 ~/.config/nomad-manager 目录被迁移到 np。
+func TestDefaultDirMigratesLegacy(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	legacy := filepath.Join(base, "nomad-manager")
+	if err := os.MkdirAll(legacy, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	payload := "[]"
+	if err := os.WriteFile(filepath.Join(legacy, "clusters.json"), []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dir, err := DefaultDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(base, "np")
+	if dir != want {
+		t.Fatalf("dir = %s, want %s", dir, want)
+	}
+	// 旧目录内容必须搬到新目录，旧目录本身被移除。
+	data, err := os.ReadFile(filepath.Join(want, "clusters.json"))
+	if err != nil {
+		t.Fatalf("migrated content missing: %v", err)
+	}
+	if string(data) != payload {
+		t.Fatalf("migrated content = %q, want %q", data, payload)
+	}
+	if _, err := os.Stat(legacy); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy dir still exists: %v", err)
+	}
+}
+
+// TestDefaultDirSkipsMigrationWhenNewExists 新目录已存在时不得搬动旧目录。
+func TestDefaultDirSkipsMigrationWhenNewExists(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	legacy := filepath.Join(base, "nomad-manager")
+	if err := os.MkdirAll(legacy, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	newDir := filepath.Join(base, "np")
+	if err := os.MkdirAll(newDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	dir, err := DefaultDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != newDir {
+		t.Fatalf("dir = %s, want %s", dir, newDir)
+	}
+	// 旧目录保持原样（不覆盖、不搬移）。
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("legacy dir should be untouched: %v", err)
 	}
 }

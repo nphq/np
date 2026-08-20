@@ -54,7 +54,9 @@ tasks:
       - frontend/bindings/**/*
     cmds:
       - task: go:mod:tidy
-      - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true -ts
+      # -names：按方法名（FQN）分发，无哈希 ID —— 不需要 obfuscated 注册表，
+      # 也不存在 ID 漂移/碰撞问题（见 review P0-1）。
+      - wails3 generate bindings -names -f '{{.BUILD_FLAGS}}' -clean=true -ts
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` files from an image
@@ -97,13 +99,17 @@ tasks:
       - git checkout -- build/config.yml build/darwin/Info.plist build/darwin/Info.dev.plist build/windows/nsis/wails_tools.nsh build/linux/nfpm/nfpm.yaml
 
   regen-bindings:
-    summary: Regenerates Wails bindings + obfuscated IDs (run after Wails upgrade)
+    summary: Regenerates Wails bindings in-tree (run after Wails upgrade or bound-method changes)
     cmds:
-      - wails3 generate bindings -obfuscated ./... -clean=true -ts
-      - task: common:strip:obfuscated
+      - wails3 generate bindings -names ./... -clean=true -ts
 
-  strip:obfuscated:
-    summary: Strips the wails_obfuscated build tag (keeps binding IDs stable in plain builds)
-    internal: true
+  check:bindings:
+    summary: Regenerates bindings in a temp dir and asserts no drift (CI + local guard)
     cmds:
-      - sed -i '' '/^\/\/go:build wails_obfuscated$/d' wails_obfuscated.gen.go
+      - bash scripts/check-bindings-sync.sh
+
+  check:version:
+    summary: Asserts build/WAILS_VERSION matches the go.mod wails/v3 dependency
+    cmds:
+      - bash scripts/check-version-sync.sh
+

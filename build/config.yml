@@ -5,7 +5,7 @@ version: '3'
 info:
   companyName: "Sphinx"
   productName: "Nomad Panel"
-  productIdentifier: "com.wails.nomad-panel"
+  productIdentifier: "com.nphq.np"
   description: "Nomad cluster manager desktop app"
   copyright: "© 2026, Sphinx"
   comments: "Nomad Panel"

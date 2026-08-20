@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -37,8 +37,10 @@ func newAppWithDeps(t *testing.T) (*App, *config.Store, *secure.MemoryKeyring) {
 
 // callBinding 通过 v3 binding dispatcher 调用 bound method，模拟前端调用路径。
 // 这是真正 end-to-end 的：参数经 JSON 往返、走 v3 BoundMethod.Call 的全部错误处理逻辑。
-// methodID 必须和 wails3 generate bindings 生成的稳定 ID 一致（前端 $Call.ByID 用同一个）。
-func callBinding(t *testing.T, app *App, methodID uint32, args ...any) (any, error) {
+// name 用生成器输出的 FQN（与前端 $Call.ByName 的同一字符串，见 frontend/bindings）。
+// 服务必须位于非 main 包：Wails 生成器对 package main 硬编码 "main." 前缀而运行时
+// 按模块路径索引，二者不一致会导致按名分发找不到方法（review P0-1）。
+func callBinding(t *testing.T, app *App, name string, args ...any) (any, error) {
 	t.Helper()
 	// application.NewBindings 需要 globalApplication 已初始化（其内部 a.debug 用到 Logger）
 	_ = application.New(application.Options{})
@@ -51,49 +53,13 @@ func callBinding(t *testing.T, app *App, methodID uint32, args ...any) (any, err
 		b, _ := json.Marshal(a)
 		rawArgs = append(rawArgs, b)
 	}
-	// 双路径都试一遍：ByID（前端实际路径）+ ByName（fallback，用 v3 test 文件里的格式）
-	m := bindings.GetByID(methodID)
+	// 与前端 $Call.ByName 同一路径（v3 CallOptions.MethodName → bindings.Get）
+	m := bindings.Get(&application.CallOptions{MethodName: name})
 	if m == nil {
-		// main 包的 PkgPath 是 "main"；用 FQN fallback 帮助诊断 ID 不匹配的情形
-		m = bindings.Get(&application.CallOptions{
-			MethodName: "main.App." + nameForID(methodID),
-		})
-	}
-	if m == nil {
-		t.Fatalf("bound method not found by ID: %d (also not via FQN fallback)", methodID)
+		t.Fatalf("bound method not found by name: %s", name)
 	}
 	return m.Call(context.Background(), rawArgs)
 }
-
-// nameForID 把已知的稳定 method ID 反查到方法名，仅用于诊断 FQN fallback。
-func nameForID(id uint32) string {
-	switch id {
-	case bindingRemoveCluster:
-		return "RemoveCluster"
-	case bindingSetActiveCluster:
-		return "SetActiveCluster"
-	case bindingListClusters:
-		return "ListClusters"
-	case bindingDiscoverClusters:
-		return "DiscoverClusters"
-	case bindingImportFromEnv:
-		return "ImportFromEnv"
-	case bindingPinCluster:
-		return "PinCluster"
-	}
-	return ""
-}
-
-// v3 生成的稳定 method ID（来自 frontend/bindings/nomad-manager/app.ts）。
-// 改名/重排方法时 wails3 generate bindings 会重算，测试要同步更新。
-const (
-	bindingRemoveCluster    uint32 = 624040237
-	bindingSetActiveCluster uint32 = 4053701917
-	bindingListClusters     uint32 = 2689603438
-	bindingDiscoverClusters uint32 = 1339163193
-	bindingImportFromEnv    uint32 = 3269253331
-	bindingPinCluster       uint32 = 1873643878
-)
 
 // TestE2ERemoveCluster_ActiveCluster 验证：
 //   - RemoveCluster 经 v3 binding dispatcher 调用后返回 (nil, nil)（前端 if(err) 判定为成功）
@@ -120,7 +86,7 @@ func TestE2ERemoveCluster_ActiveCluster(t *testing.T) {
 	}
 
 	// 经 v3 binding dispatcher 调用 RemoveCluster（模拟前端 await RemoveCluster(id)）
-	result, err := callBinding(t, app, bindingRemoveCluster, "dev-1")
+	result, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.RemoveCluster", "dev-1")
 	if err != nil {
 		t.Fatalf("binding Call returned error: %v", err)
 	}
@@ -148,7 +114,7 @@ func TestE2ERemoveCluster_ActiveCluster(t *testing.T) {
 func TestE2ERemoveCluster_NotFound(t *testing.T) {
 	app, _, _ := newAppWithDeps(t)
 
-	result, err := callBinding(t, app, bindingRemoveCluster, "no-such-cluster")
+	result, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.RemoveCluster", "no-such-cluster")
 	if err != nil {
 		t.Fatalf("dispatcher should not reject for in-data error: %v", err)
 	}
@@ -166,7 +132,7 @@ func TestE2ERemoveCluster_NotFound(t *testing.T) {
 func TestE2ERemoveCluster_InvalidInput(t *testing.T) {
 	app, _, _ := newAppWithDeps(t)
 
-	result, err := callBinding(t, app, bindingRemoveCluster, "")
+	result, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.RemoveCluster", "")
 	if err != nil {
 		t.Fatalf("dispatcher should not reject for validation error: %v", err)
 	}
@@ -186,7 +152,7 @@ func TestE2EImportFromEnvBinding(t *testing.T) {
 	t.Setenv("NOMAD_TOKEN", "binding-secret")
 	app, _, kr := newAppWithDeps(t)
 
-	result, err := callBinding(t, app, bindingImportFromEnv, "Imported")
+	result, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.ImportFromEnv", "Imported")
 	if err != nil {
 		t.Fatalf("ImportFromEnv binding: %v", err)
 	}
@@ -216,7 +182,7 @@ func TestE2EPinClusterBinding(t *testing.T) {
 	_ = app.clusters.AddCluster(uiapi.ClusterInput{ID: "z", Name: "Z", Address: "http://z:4646"})
 	_ = app.clusters.AddCluster(uiapi.ClusterInput{ID: "a", Name: "A", Address: "http://a:4646"})
 
-	if _, err := callBinding(t, app, bindingPinCluster, "z", true); err != nil {
+	if _, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.PinCluster", "z", true); err != nil {
 		t.Fatalf("PinCluster binding: %v", err)
 	}
 	list, e := app.clusters.ListClusters()
@@ -230,7 +196,7 @@ func TestE2EDiscoverClustersBinding(t *testing.T) {
 	t.Setenv("NOMAD_ADDR", "http://127.0.0.1:4646")
 	app, _, _ := newAppWithDeps(t)
 
-	result, err := callBinding(t, app, bindingDiscoverClusters)
+	result, err := callBinding(t, app, "github.com/nphq/np/internal/app.App.DiscoverClusters")
 	if err != nil {
 		t.Fatalf("DiscoverClusters binding: %v", err)
 	}

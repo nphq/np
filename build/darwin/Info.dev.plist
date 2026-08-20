@@ -10,7 +10,7 @@
         <key>CFBundleExecutable</key>
         <string>np</string>
         <key>CFBundleIdentifier</key>
-        <string>com.wails.nomad-panel</string>
+        <string>com.nphq.np</string>
         <key>CFBundleVersion</key>
         <string>__VERSION__</string>
         <key>CFBundleGetInfoString</key>

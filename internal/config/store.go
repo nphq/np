@@ -39,7 +39,14 @@ type Store struct {
 	loaded   bool
 }
 
-// DefaultDir 返回用户配置目录：~/.config/nomad-manager
+// dirName 是当前配置目录名（品牌短名）；legacyDirName 是品牌统一前的旧目录名。
+const (
+	dirName       = "np"
+	legacyDirName = "nomad-manager"
+)
+
+// DefaultDir 返回用户配置目录：~/.config/np
+// （品牌统一前为 ~/.config/nomad-manager，旧目录存在时自动迁移一次）。
 func DefaultDir() (string, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
@@ -49,12 +56,35 @@ func DefaultDir() (string, error) {
 		}
 		base = filepath.Join(home, ".config")
 	}
-	dir := filepath.Join(base, "nomad-manager")
+	dir := filepath.Join(base, dirName)
+	// 一次性迁移旧版目录；失败仅告警不阻断启动（新目录照常创建）。
+	if err := migrateLegacyDir(base, dir); err != nil {
+		fmt.Printf("WARN: migrate legacy config dir %s -> %s: %v\n", filepath.Join(base, legacyDirName), dir, err)
+	}
 	// 目录来自 XDG/HOME，非请求路径；0750 限制同用户组外访问。
 	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // G703: trusted config home, not user path input
 		return "", err
 	}
 	return dir, nil
+}
+
+// migrateLegacyDir 把旧版配置目录（~/.config/nomad-manager）迁移到新目录。
+// 仅当旧目录存在且新目录不存在时执行；新目录已存在则跳过，绝不覆盖用户数据。
+// base/newDir 来自 XDG/HOME 与固定常量，非用户输入路径（与 DefaultDir 同源）。
+func migrateLegacyDir(base, newDir string) error {
+	legacy := filepath.Join(base, legacyDirName)
+	if _, err := os.Stat(legacy); err != nil { //nolint:gosec // G703: trusted config home, not user path input
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if _, err := os.Stat(newDir); err == nil { //nolint:gosec // G703: trusted config home, not user path input
+		return nil // 新目录已有内容，保留旧目录不动
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return os.Rename(legacy, newDir) //nolint:gosec // G703: trusted config home, not user path input
 }
 
 // DefaultPath 返回默认的集群配置文件路径

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // 竞态防护测试（评审 P0-2）：job 详情/列表的 epoch guard 与 busyOp 串行化。
 
-vi.mock('../../../bindings/github.com/nphq/np/app', () => ({
+vi.mock('../../../bindings/github.com/nphq/np/internal/app/app', () => ({
   ListJobs: vi.fn(),
   GetJob: vi.fn(),
   ListJobAllocations: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('../../../bindings/github.com/nphq/np/app', () => ({
   StopJob: vi.fn(),
 }))
 
-import * as app from '../../../bindings/github.com/nphq/np/app'
+import * as app from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { createJobsStore } from './jobs.svelte'
 
 function deferred<T>() {

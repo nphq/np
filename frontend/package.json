@@ -1,5 +1,5 @@
 {
-  "name": "nomad-manager",
+  "name": "np",
   "version": "0.1.0",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -7,7 +7,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^26.1.2",
-    "@wailsio/runtime": "^3.0.0-beta.1",
+    "@wailsio/runtime": "^3.0.0-beta.10",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.22.0",

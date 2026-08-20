@@ -33,6 +33,17 @@ jobs:
             libwebkitgtk-6.0-dev \
             libwayland-dev
 
+      # 版本单一来源校验（review P0-2）：CLI 版本必须与 go.mod runtime 一致
+      - name: Check Wails version sync
+        run: bash scripts/check-version-sync.sh
+
+      # bindings 漂移校验（review P0-1）：临时目录重新生成并与已提交内容比对。
+      # wails3 CLI 从 build/WAILS_VERSION 安装（与 go.mod 一致，上一步已校验）。
+      - name: Check bindings sync
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@$(cat build/WAILS_VERSION)
+          bash scripts/check-bindings-sync.sh
+
       # 必须先 build frontend：main.go 用 //go:embed all:frontend/dist，
       # dist 被 .gitignore 忽略，go vet/test/lint 之前需要先生成
       - name: Frontend install + lint + typecheck + test + build
@@ -101,7 +112,7 @@ jobs:
             libwayland-dev
 
       - name: Pull Nomad image (warm cache)
-        run: docker pull hashicorp/nomad:2.0.4
+        run: docker pull hashicorp/nomad:2.0.5
 
       - name: go vet e2e
         run: go vet -tags=e2e ./internal/e2e/...

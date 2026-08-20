@@ -19,8 +19,8 @@ Built with **Wails v3 + Go + Svelte 5 + TypeScript**, designed to be fast, keybo
 
 - **Go** ≥ 1.26
 - **Bun** ≥ 1.3 — the **only** JS toolchain: package manager, Vite build, linters and tests all run under Bun. Node.js is **not** required (CI and lefthook use `bun` exclusively; verified with a Node-free `PATH`).
-- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@$(cat build/WAILS_VERSION)`（当前 `v3.0.0-beta.6`；`build/WAILS_VERSION` 是版本单一来源，升级时同步改它）
-- A **Nomad** cluster (≥ 2.0; verified against `hashicorp/nomad:2.0.4`)
+- **Wails CLI v3** — `go install github.com/wailsapp/wails/v3/cmd/wails3@$(cat build/WAILS_VERSION)`（当前 `v3.0.0-beta.10`；`build/WAILS_VERSION` 是 CLI 版本单一来源，`scripts/check-version-sync.sh` 会在 CI 强制它与 go.mod 的 runtime 版本一致）
+- A **Nomad** cluster (≥ 2.0; verified against `hashicorp/nomad:2.0.5`)
 
 > Frontend bundle: routes are code-split — only the screen you open is loaded. The
 > CodeMirror editor (~300 KB) is fetched lazily when entering the Run Job page;
@@ -122,7 +122,7 @@ The `internal/e2e` suite runs against a real `hashicorp/nomad` container and is 
                │ IPC (bound methods + events)
 ┌──────────────▼──────────────────────────┐
 │  Go backend                             │
-│  app.go (thin bound methods)            │
+│  internal/app — thin bound methods      │
 │  internal/uiapi   — IPC-facing services │
 │  internal/nomad   — Nomad SDK → DTOs    │
 │  internal/cluster — client pool, health │
@@ -134,7 +134,7 @@ The `internal/e2e` suite runs against a real `hashicorp/nomad` container and is 
 
 ## Project Status
 
-Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs screens, metrics pipeline, job management, deploy observability). Darwin / Windows / Linux builds and packaging are supported via Wails Taskfiles (`wails3 build` / `wails3 package`). The project depends on **Wails v3.0.0-beta.6**.
+Milestones M0–M3c are complete (scaffolding, connection layer, overview/nodes/jobs screens, metrics pipeline, job management, deploy observability). Darwin / Windows / Linux builds and packaging are supported via Wails Taskfiles (`wails3 build` / `wails3 package`). The project depends on **Wails v3.0.0-beta.10**.
 
 ## Contributing
 

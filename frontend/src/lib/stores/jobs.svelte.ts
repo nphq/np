@@ -11,7 +11,7 @@ import {
   ScaleJob,
   StopAlloc,
   StopJob,
-} from '../../../bindings/github.com/nphq/np/app'
+} from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { isErr, toast, toastErr } from './clusters.svelte'
 import { createEpoch } from './epoch.svelte'
 import { t } from '../i18n/index.svelte'

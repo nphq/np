@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -15,6 +15,11 @@ import (
 // App 承载全部 Wails bound methods（薄层，转调 uiapi）。
 // v3：实现 application.ServiceStartup / ServiceShutdown 接口，
 // 在 ServiceStartup 里通过 application.Get() 拿到 *application.App 引用注入给 service。
+//
+// 注意：服务必须放在非 main 包。Wails v3 生成器对 package main 硬编码 FQN 前缀
+// "main"，而运行时按 reflect.PkgPath()（模块路径）索引 —— 二者不一致会导致按名
+// 分发（$Call.ByName）找不到方法。放在 internal/app 后两边都是
+// "github.com/nphq/np/internal/app"（review P0-1）。
 type App struct {
 	ctx      context.Context
 	clusters *uiapi.ClusterService
@@ -158,15 +163,6 @@ func (a *App) DiscoverClusters() (any, error) {
 // ImportFromEnv 从 NOMAD_* 环境变量一键导入并激活集群。
 func (a *App) ImportFromEnv(name string) (any, error) {
 	info, e := a.clusters.ImportFromEnv(name)
-	if e != nil {
-		return e, nil
-	}
-	return info, nil
-}
-
-// ImportClusterJSON 导入与 ClusterConfig 同形的 JSON（数组或单对象）。
-func (a *App) ImportClusterJSON(raw string) (any, error) {
-	info, e := a.clusters.ImportClusterJSON(raw)
 	if e != nil {
 		return e, nil
 	}

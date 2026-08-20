@@ -46,7 +46,9 @@
       return 'failed'
     }
     if (evalInfo?.failedSummary) {
-      if (running === 0 && allocs.length === 0) return 'failed'
+      // 调度失败：若 Nomad 仍在等容量/自动重试（blocked eval 存在），不是终态 ——
+      // 保持 evaluating 让轮询继续，等 blocked eval 落地为 alloc 后转 placing/running。
+      if (running === 0 && allocs.length === 0 && !evalInfo.blockedEval) return 'failed'
     }
     if (isBatch && desired > 0 && complete >= desired && failed === 0) return 'complete'
     if (desired > 0 && running >= desired && pending === 0 && failed === 0) return 'running'
@@ -196,11 +198,15 @@
     <pre
       class="mt-3 max-h-24 overflow-auto rounded border border-amber-400/20 bg-amber-400/5 p-2 text-[11px] whitespace-pre-wrap text-amber-200/90">{warnings}</pre>
   {/if}
-  {#if evalInfo?.failedSummary}
+  {#if evalInfo?.failedSummary && phase !== 'running' && phase !== 'complete'}
     <pre
       class="mt-3 max-h-24 overflow-auto rounded border border-red-800 bg-red-950/50 p-2 text-[11px] whitespace-pre-wrap text-red-300/90">{evalInfo.failedSummary}</pre>
-  {/if}
-  {#if phase === 'failed'}
-    <p class="mt-3 text-[11px] text-red-300/80">{t('deploy.failedHint')}</p>
+    {#if phase === 'failed'}
+      <p class="mt-3 text-[11px] text-red-300/80">
+        {allocs.length === 0 ? t('deploy.placementHint') : t('deploy.failedHint')}
+      </p>
+    {:else if phase === 'evaluating'}
+      <p class="mt-3 text-[11px] text-amber-300/80">{t('deploy.retryingHint')}</p>
+    {/if}
   {/if}
 </div>

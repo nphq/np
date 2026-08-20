@@ -7,8 +7,10 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
-// ServiceName 是 Keychain 中统一的服务名。
-const ServiceName = "nomad-manager"
+// ServiceName 是 Keychain 中统一的服务名（品牌短名 np）。
+// 旧版本使用 "nomad-manager" 作为 service；历史 token 不会自动迁移，
+// 升级后需在编辑集群时重新录入（MVP 阶段接受，见 review 建议）。
+const ServiceName = "np"
 
 var (
 	ErrTokenNotFound = errors.New("token not found")

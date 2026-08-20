@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { ClusterInput } from '../stores/clusters.svelte'
-  import { TestConnectionInput } from '../../../bindings/github.com/nphq/np/app'
+  import { TestConnectionInput } from '../../../bindings/github.com/nphq/np/internal/app/app'
   import { isErr } from '../stores/clusters.svelte'
   import { t } from '../i18n/index.svelte'
   import FormBanner from './FormBanner.svelte'

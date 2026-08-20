@@ -5,16 +5,18 @@ import (
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/nphq/np/internal/app"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	app := NewApp()
+	app := app.NewApp()
 
 	wailsApp := application.New(application.Options{
-		Name: "nomad-manager",
+		Name: "Nomad Panel",
 		Services: []application.Service{
 			application.NewService(app),
 		},
@@ -24,7 +26,7 @@ func main() {
 	})
 
 	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "nomad-manager",
+		Title:            "Nomad Panel",
 		Width:            1024,
 		Height:           768,
 		BackgroundColour: application.NewRGBA(27, 38, 54, 255),

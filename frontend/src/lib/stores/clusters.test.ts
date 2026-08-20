@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // 竞态防护测试（评审 P0-2）：mock 掉 Wails bindings，用可控 deferred 验证
 // 快速切换时旧请求的迟到响应不会覆盖新上下文。
 
-vi.mock('../../../bindings/github.com/nphq/np/app', () => ({
+vi.mock('../../../bindings/github.com/nphq/np/internal/app/app', () => ({
   ListClusters: vi.fn(),
   AddCluster: vi.fn(),
   RemoveCluster: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@wailsio/runtime', () => ({
   Events: { On: vi.fn(), Off: vi.fn() },
 }))
 
-import * as app from '../../../bindings/github.com/nphq/np/app'
+import * as app from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { createClustersStore } from './clusters.svelte'
 import type { nomad } from '../types/wails'
 

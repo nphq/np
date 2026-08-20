@@ -3,6 +3,7 @@ package nomad
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,27 +43,61 @@ func GetEvaluation(ctx context.Context, client *api.Client, evalID string) (*Eva
 		out.WaitUntil = ev.WaitUntil.UnixMilli()
 	}
 	if len(ev.FailedTGAllocs) > 0 {
-		var parts []string
-		for tg, metric := range ev.FailedTGAllocs {
-			if metric == nil {
-				parts = append(parts, tg+": placement failed")
-				continue
-			}
-			avail := 0
-			for _, n := range metric.NodesAvailable {
-				avail += n
-			}
-			if metric.CoalescedFailures == 0 && avail == 0 && metric.NodesEvaluated > 0 {
-				parts = append(parts, fmt.Sprintf("%s: no eligible nodes (evaluated=%d filtered=%d)",
-					tg, metric.NodesEvaluated, metric.NodesFiltered))
-			} else {
-				parts = append(parts, fmt.Sprintf("%s: coalescedFailures=%d nodesEvaluated=%d nodesFiltered=%d",
-					tg, metric.CoalescedFailures, metric.NodesEvaluated, metric.NodesFiltered))
-			}
-		}
-		out.FailedSummary = strings.Join(parts, "; ")
+		out.FailedSummary = evalFailedSummary(ev.FailedTGAllocs)
 	}
 	return out, nil
+}
+
+// evalFailedSummary 把调度失败指标转成人类可读摘要。
+// 每个 task group 优先展示节点被过滤的具体原因（ConstraintFiltered / ClassFiltered，
+// 如 "missing drivers"），再附计数；无原因时回退到原有计数描述。
+// 提取为纯函数便于单测（不依赖 SDK 调用）。
+func evalFailedSummary(failed map[string]*api.AllocationMetric) string {
+	groups := make([]string, 0, len(failed))
+	for tg, metric := range failed {
+		groups = append(groups, failedGroupSummary(tg, metric))
+	}
+	sort.Strings(groups)
+	return strings.Join(groups, "; ")
+}
+
+func failedGroupSummary(tg string, metric *api.AllocationMetric) string {
+	if metric == nil {
+		return tg + ": placement failed"
+	}
+	if reasons := filterReasons(metric); len(reasons) > 0 {
+		return fmt.Sprintf("%s: %s (coalescedFailures=%d nodesEvaluated=%d nodesFiltered=%d)",
+			tg, strings.Join(reasons, "; "), metric.CoalescedFailures, metric.NodesEvaluated, metric.NodesFiltered)
+	}
+	avail := 0
+	for _, n := range metric.NodesAvailable {
+		avail += n
+	}
+	if metric.CoalescedFailures == 0 && avail == 0 && metric.NodesEvaluated > 0 {
+		return fmt.Sprintf("%s: no eligible nodes (evaluated=%d filtered=%d)",
+			tg, metric.NodesEvaluated, metric.NodesFiltered)
+	}
+	return fmt.Sprintf("%s: coalescedFailures=%d nodesEvaluated=%d nodesFiltered=%d",
+		tg, metric.CoalescedFailures, metric.NodesEvaluated, metric.NodesFiltered)
+}
+
+// filterReasons 汇总节点被过滤的具体原因（约束 / 节点类），如 "missing drivers"。
+// 只给计数（coalescedFailures=1 nodesFiltered=1）看不出为什么调度失败；
+// 可行动的原因在 AllocationMetric.ConstraintFiltered / ClassFiltered 里。
+func filterReasons(m *api.AllocationMetric) []string {
+	reasons := make([]string, 0, len(m.ConstraintFiltered)+len(m.ClassFiltered))
+	for reason, n := range m.ConstraintFiltered {
+		if n > 0 {
+			reasons = append(reasons, fmt.Sprintf("%s: %d", reason, n))
+		}
+	}
+	for class, n := range m.ClassFiltered {
+		if n > 0 {
+			reasons = append(reasons, fmt.Sprintf("node class %s: %d", class, n))
+		}
+	}
+	sort.Strings(reasons)
+	return reasons
 }
 
 // ListAllocTaskEvents 返回 alloc 各任务的近期事件（启动失败诊断）。

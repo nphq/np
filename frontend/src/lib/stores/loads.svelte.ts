@@ -1,4 +1,4 @@
-import { GetClusterLoad, GetNodeLoads } from '../../../bindings/github.com/nphq/np/app'
+import { GetClusterLoad, GetNodeLoads } from '../../../bindings/github.com/nphq/np/internal/app/app'
 import { Events } from '@wailsio/runtime'
 import { isErr, toastErr } from './clusters.svelte'
 import { createEpoch } from './epoch.svelte'

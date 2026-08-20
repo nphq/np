@@ -8,12 +8,8 @@ const zh = {
   'common.confirm': '确认',
   'common.working': '处理中…',
   'common.loading': '加载中…',
-  'common.back': '返回',
   'common.na': 'n/a',
-  'common.save': '保存',
   'common.saving': '保存中…',
-  'common.filter': '筛选',
-  'common.search': '搜索',
   'confirm.typeToConfirm': '请输入 “{phrase}” 以确认',
   'confirm.fillPhrase': '填入 {phrase}',
 
@@ -200,7 +196,6 @@ const zh = {
   'overview.polling': '15s 轮询 · 容量 / 已分配 / 已用 · CPU MHz · 内存/磁盘 MB',
   'overview.used': '已用',
   'overview.allocated': '已分配',
-  'overview.capacity': '容量',
   'overview.collecting': '正在采集负载数据…',
   'overview.noDataYet': '暂无负载数据 — 等待首次轮询。',
   'overview.nodes': '节点',
@@ -249,7 +244,6 @@ const zh = {
   'jobs.col.queued': '排队中',
   'jobs.col.pending': '待启动',
   'jobs.col.failed': '失败',
-  'jobs.col.dead': '已停止',
   'jobs.col.type': '类型',
   'jobs.col.priority': '优先级',
   'jobs.selectPage': '全选本页',
@@ -310,6 +304,10 @@ const zh = {
   'deploy.polling': '跟踪中…',
   'deploy.settled': '已稳定',
   'deploy.failedHint': '调度或启动失败。打开分配「日志」查看任务事件与 stdout/stderr。',
+  'deploy.placementHint':
+    '调度失败：没有节点满足条件（如缺少驱动或约束不匹配），尚未产生分配、也暂无日志可看。请按上方原因检查节点。',
+  'deploy.retryingHint':
+    '调度暂未成功，Nomad 正在等待容量并自动重试（blocked eval），页面会持续跟踪。',
   'deploy.phase.submitted': '已提交',
   'deploy.phase.evaluating': '评估中',
   'deploy.phase.placing': '放置中',
@@ -388,7 +386,6 @@ const zh = {
   'runJob.err.envLines': '存在无法解析的环境变量行（需要 KEY=value）',
   'runJob.err.namespace': '命名空间无效（不可含空格或 / \\）',
   'runJob.err.specRequired': '请先填写任务规格',
-  'runJob.tpl.hint': '更多精选应用请前往侧栏「应用」。',
   'runJob.tpl.openApps': '浏览应用目录 →',
   'runJob.confirmTitle': '确认提交任务？',
   'runJob.confirmBodyForm':

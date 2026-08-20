@@ -4,7 +4,7 @@
 // server（server-only 配置，避免 dev agent 在 Docker 内的 cgroup 限制），
 // 对 internal/cluster + internal/uiapi 做端到端验证。
 // 默认不跑：`go test ./...` 跳过本包；`go test -tags=e2e ./internal/e2e/...` 触发。
-// 镜像可用环境变量 NOMAD_IMAGE 覆盖（默认 hashicorp/nomad:2.0.4）。
+// 镜像可用环境变量 NOMAD_IMAGE 覆盖（默认 hashicorp/nomad:2.0.5）。
 package e2e
 
 import (
@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const defaultImage = "hashicorp/nomad:2.0.4"
+const defaultImage = "hashicorp/nomad:2.0.5"
 
 func nomadImage() string {
 	if v := os.Getenv("NOMAD_IMAGE"); v != "" {
