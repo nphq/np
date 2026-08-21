@@ -3,6 +3,7 @@ package nomad
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/nomad/api"
 )
@@ -44,6 +45,16 @@ func mapNodeListStub(n *api.NodeListStub) NodeSummary {
 		ns.CPUCores = int(n.NodeResources.Cpu.TotalCpuCores)
 		ns.MemoryTotal = float64(n.NodeResources.Memory.MemoryMB)
 		ns.DiskTotal = float64(n.NodeResources.Disk.DiskMB)
+	}
+	if len(n.Drivers) > 0 {
+		drivers := make([]string, 0, len(n.Drivers))
+		for name, info := range n.Drivers {
+			if info != nil && info.Detected {
+				drivers = append(drivers, name)
+			}
+		}
+		sort.Strings(drivers)
+		ns.Drivers = drivers
 	}
 	return ns
 }

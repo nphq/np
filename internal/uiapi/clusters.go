@@ -366,7 +366,25 @@ func (s *ClusterService) SetActiveCluster(clusterID string) *Error {
 	if s.OnActiveChanged != nil {
 		s.OnActiveChanged(clusterID)
 	}
+	// 立即异步探测：不要等 monitor 的 30s 周期，避免侧边栏长期显示 stale down。
+	go s.probeActiveAsync(clusterID)
 	return nil
+}
+
+// probeActiveAsync 激活后立刻探一次；失败仅写 monitor 缓存/事件，不回传调用方。
+func (s *ClusterService) probeActiveAsync(clusterID string) {
+	target, err := s.pool.ProbeTarget(clusterID)
+	if err != nil {
+		u := cluster.HealthUpdate{
+			ClusterID:   clusterID,
+			Status:      "down",
+			LastChecked: time.Now().Unix(),
+			Error:       fmt.Sprintf("client: %v", err),
+		}
+		s.monitor.Inject(u)
+		return
+	}
+	_ = s.probeTarget(clusterID, target)
 }
 
 // ActiveCluster 返回当前激活集群 ID。

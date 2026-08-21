@@ -203,7 +203,13 @@
       class="mt-3 max-h-24 overflow-auto rounded border border-red-800 bg-red-950/50 p-2 text-[11px] whitespace-pre-wrap text-red-300/90">{evalInfo.failedSummary}</pre>
     {#if phase === 'failed'}
       <p class="mt-3 text-[11px] text-red-300/80">
-        {allocs.length === 0 ? t('deploy.placementHint') : t('deploy.failedHint')}
+        {#if /missing drivers/i.test(evalInfo.failedSummary)}
+          {t('deploy.missingDriversHint')}
+        {:else if allocs.length === 0}
+          {t('deploy.placementHint')}
+        {:else}
+          {t('deploy.failedHint')}
+        {/if}
       </p>
     {:else if phase === 'evaluating'}
       <p class="mt-3 text-[11px] text-amber-300/80">{t('deploy.retryingHint')}</p>

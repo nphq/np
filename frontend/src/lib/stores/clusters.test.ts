@@ -20,6 +20,7 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 import * as app from '../../../bindings/github.com/nphq/np/internal/app/app'
+import { Events } from '@wailsio/runtime'
 import { createClustersStore } from './clusters.svelte'
 import type { nomad } from '../types/wails'
 
@@ -31,11 +32,36 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function listResponse(clusterID: string): nomad.ClusterList {
+function listResponse(
+  clusterID: string,
+  overrides: Partial<nomad.ClusterInfo> = {},
+): nomad.ClusterList {
   return {
-    clusters: [{ id: clusterID, name: clusterID, addr: `http://${clusterID}:4646` }],
+    clusters: [
+      {
+        id: clusterID,
+        name: clusterID,
+        address: `http://${clusterID}:4646`,
+        health: 'unknown',
+        lastChecked: 0,
+        ...overrides,
+      },
+    ],
     activeID: clusterID,
   } as unknown as nomad.ClusterList
+}
+
+type HealthHandler = (ev: { data: unknown }) => void
+
+function captureHealthHandler(): HealthHandler {
+  let handler: HealthHandler | undefined
+  vi.mocked(Events.On).mockImplementation(((_name: string, cb: (ev: unknown) => void) => {
+    handler = cb as HealthHandler
+  }) as never)
+  return (ev) => {
+    if (!handler) throw new Error('health handler not registered')
+    handler(ev)
+  }
 }
 
 describe('clusters store 竞态防护', () => {
@@ -125,5 +151,47 @@ describe('clusters store 竞态防护', () => {
     await p1
 
     expect(store.state.clusters[0].info.id).toBe('c2')
+  })
+
+  it('refresh 不得用过期快照覆盖更新的 health', async () => {
+    const emit = captureHealthHandler()
+    vi.mocked(app.ListClusters).mockResolvedValueOnce(
+      listResponse('c1', { health: 'unknown', lastChecked: 1 }) as never,
+    )
+    const store = createClustersStore()
+    await store.refresh()
+
+    const dList = deferred<nomad.ClusterList>()
+    vi.mocked(app.ListClusters).mockReturnValueOnce(dList.promise as never)
+    const p = store.refresh()
+    emit({
+      data: { clusterID: 'c1', status: 'ok', lastChecked: 100, leader: '127.0.0.1:4647' },
+    })
+    expect(store.state.clusters[0].info.health).toBe('ok')
+
+    // 慢快照仍是 unknown / 更早时间戳 → 合入后必须保留 ok
+    dList.resolve(listResponse('c1', { health: 'unknown', lastChecked: 1 }))
+    await p
+
+    expect(store.state.clusters[0].info.health).toBe('ok')
+    expect(store.state.clusters[0].info.lastChecked).toBe(100)
+    expect(store.state.clusters[0].leader).toBe('127.0.0.1:4647')
+  })
+
+  it('列表尚空时的 health 事件在 refresh 后合入', async () => {
+    const emit = captureHealthHandler()
+    const store = createClustersStore()
+    emit({
+      data: { clusterID: 'c1', status: 'ok', lastChecked: 50, version: '1.9.4' },
+    })
+    expect(store.state.clusters).toHaveLength(0)
+
+    vi.mocked(app.ListClusters).mockResolvedValueOnce(
+      listResponse('c1', { health: 'unknown', lastChecked: 0 }) as never,
+    )
+    await store.refresh()
+
+    expect(store.state.clusters[0].info.health).toBe('ok')
+    expect(store.state.clusters[0].version).toBe('1.9.4')
   })
 })

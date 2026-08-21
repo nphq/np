@@ -14,11 +14,14 @@
     type AppCategory,
     type CatalogApp,
   } from '../../jobs/spec'
+  import { clusterHasDriver } from '../../utils/drivers'
+  import type { nomad } from '../../types/wails'
 
   let {
     busy = false,
     selectedId = null,
     existingJobIDs = [],
+    nodes = [],
     onSelect,
     onCustomize,
     onRun,
@@ -27,6 +30,7 @@
     busy?: boolean
     selectedId?: string | null
     existingJobIDs?: string[]
+    nodes?: nomad.NodeSummary[]
     onSelect: (appID: string | null) => void
     onCustomize: (appID: string) => void
     onRun: (input: RunJobInput) => Promise<RunJobOutcome>
@@ -150,6 +154,12 @@
     onDone(outcome.result.jobID)
   }
 
+  function appNeedsDocker(app: CatalogApp): boolean {
+    if (app.kind === 'form') return true
+    if (app.driver === 'exec' || app.driver === 'raw_exec') return false
+    return true
+  }
+
   function confirmBody(app: CatalogApp): string {
     const jobID = appJobID(app)
     let body: string
@@ -170,6 +180,9 @@
     }
     if (willOverwrite(app)) {
       body += '\n\n' + t('apps.confirmOverwrite', { jobID })
+    }
+    if (appNeedsDocker(app) && nodes.length > 0 && !clusterHasDriver(nodes, 'docker')) {
+      body += '\n\n' + t('deploy.driverWarnDocker')
     }
     return body
   }
@@ -281,6 +294,15 @@
         {#if warnings}
           <div class="mt-4">
             <FormBanner kind="warning" title={t('runJob.warnings')} message={warnings} />
+          </div>
+        {/if}
+        {#if selected && appNeedsDocker(selected) && nodes.length > 0 && !clusterHasDriver(nodes, 'docker')}
+          <div class="mt-4">
+            <FormBanner
+              kind="warning"
+              title={t('runJob.warnings')}
+              message={t('deploy.driverWarnDocker')}
+            />
           </div>
         {/if}
         <p class="mt-4 text-[11px] text-zinc-600">

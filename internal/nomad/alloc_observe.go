@@ -88,7 +88,7 @@ func filterReasons(m *api.AllocationMetric) []string {
 	reasons := make([]string, 0, len(m.ConstraintFiltered)+len(m.ClassFiltered))
 	for reason, n := range m.ConstraintFiltered {
 		if n > 0 {
-			reasons = append(reasons, fmt.Sprintf("%s: %d", reason, n))
+			reasons = append(reasons, formatFilterReason(reason, n))
 		}
 	}
 	for class, n := range m.ClassFiltered {
@@ -98,6 +98,16 @@ func filterReasons(m *api.AllocationMetric) []string {
 	}
 	sort.Strings(reasons)
 	return reasons
+}
+
+// formatFilterReason 把 Nomad 过滤键转成可行动摘要。
+// "missing drivers" 只给计数时用户看不出要装 Docker 还是改用 exec。
+func formatFilterReason(reason string, n int) string {
+	base := fmt.Sprintf("%s: %d", reason, n)
+	if reason == "missing drivers" {
+		return base + " — required task driver not detected on filtered nodes (Docker catalog apps need Docker Engine + healthy docker client plugin; or deploy with exec/raw_exec)"
+	}
+	return base
 }
 
 // ListAllocTaskEvents 返回 alloc 各任务的近期事件（启动失败诊断）。

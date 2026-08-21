@@ -49,6 +49,7 @@
   })
 
   // 集群切换 / 同 ID 再激活（ImportFromEnv）：清空旧数据并首拉负载/节点/job。
+  // 同时主动探一次健康：总览刷新只更新负载时，侧边栏不应长期卡在 down。
   $effect(() => {
     const id = clusters.state.activeID
     const _epoch = clusters.state.activeEpoch
@@ -60,7 +61,15 @@
     void loads.refresh(id)
     void nodes.refresh(id)
     void jobs.refresh(id)
+    void clusters.testConnection(id)
   })
+
+  async function refreshOverview(): Promise<void> {
+    const id = clusters.state.activeID
+    if (!id) return
+    // 负载与健康并行：用户点「刷新」时期望侧边栏状态一并同步
+    await Promise.all([loads.refresh(id), clusters.testConnection(id)])
+  }
 
   // 进入 job-detail 时拉详情 + allocs。
   $effect(() => {
@@ -149,7 +158,6 @@
     class="flex h-10 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 select-none"
   >
     <div class="flex items-center gap-2">
-      <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
       <span class="text-sm font-semibold tracking-wide">{t('app.title')}</span>
     </div>
     <div class="flex items-center gap-3 text-xs text-zinc-400">
@@ -338,7 +346,7 @@
               clusterName={active.info.name || active.info.id}
               load={loads.state.cluster}
               busy={loads.state.loading}
-              onRefresh={() => void loads.refresh(active.info.id)}
+              onRefresh={() => void refreshOverview()}
               onSelectJob={(jobID) => ui.navigate('job-detail', { jobID })}
             />
           {/await}
@@ -424,6 +432,7 @@
               busy={jobs.state.busyOp !== null}
               selectedId={ui.route.params.appID ?? null}
               existingJobIDs={jobs.list.map((j) => j.id)}
+              nodes={nodes.list}
               onSelect={(appID) => ui.navigate('apps', appID ? { appID } : {})}
               onCustomize={(appID) => ui.navigate('job-run', { app: appID })}
               onRun={(input) => jobs.runJob(active.info.id, input)}
@@ -443,6 +452,7 @@
               busy={jobs.state.busyOp !== null}
               presetAppId={ui.route.params.app ?? null}
               existingJobIDs={jobs.list.map((j) => j.id)}
+              nodes={nodes.list}
               onRun={(input) => jobs.runJob(active.info.id, input)}
               onDone={(jobID) =>
                 ui.navigate('job-detail', {

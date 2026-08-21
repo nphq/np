@@ -86,6 +86,14 @@
         <div class="mt-1 text-xs text-zinc-500">
           {node.datacenter}{node.class ? ` · ${node.class}` : ''} · {node.status} · v{node.version}
         </div>
+        <div class="mt-2 text-xs text-zinc-400">
+          <span class="text-zinc-500 uppercase">{t('nodes.drivers')}</span>
+          <span class="ml-2 font-mono text-[11px]">
+            {(node.drivers?.length ?? 0) > 0
+              ? (node.drivers ?? []).join(', ')
+              : t('nodes.driversNone')}
+          </span>
+        </div>
       </div>
     </div>
 

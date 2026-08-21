@@ -265,6 +265,9 @@ func TestEvalFailedSummary_ConstraintReasons(t *testing.T) {
 	if !strings.Contains(summary, "web: missing drivers: 1") {
 		t.Fatalf("summary = %q, want constraint reason", summary)
 	}
+	if !strings.Contains(summary, "Docker Engine") {
+		t.Fatalf("summary = %q, want actionable docker/exec guidance", summary)
+	}
 	if !strings.Contains(summary, "coalescedFailures=1 nodesEvaluated=1 nodesFiltered=1") {
 		t.Fatalf("summary = %q, want counts", summary)
 	}

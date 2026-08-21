@@ -230,6 +230,8 @@ const zh = {
   'nodes.col.job': '任务',
   'nodes.sparkCpuHistory': 'CPU MHz 历史（{used} / {cap}）',
   'nodes.sparkMemHistory': '内存 MB 历史（{used} / {cap}）',
+  'nodes.drivers': '已检测驱动',
+  'nodes.driversNone': '未上报',
 
   // 任务（Jobs）
   'jobs.title': '任务',
@@ -306,8 +308,12 @@ const zh = {
   'deploy.failedHint': '调度或启动失败。打开分配「日志」查看任务事件与 stdout/stderr。',
   'deploy.placementHint':
     '调度失败：没有节点满足条件（如缺少驱动或约束不匹配），尚未产生分配、也暂无日志可看。请按上方原因检查节点。',
+  'deploy.missingDriversHint':
+    '缺少任务驱动：可调度节点未检测到本任务所需驱动（应用目录里多数模板依赖 Docker）。请在 client 节点安装并启动 Docker Engine，确保 docker 插件健康；或改用原生 exec / raw_exec 任务。',
   'deploy.retryingHint':
     '调度暂未成功，Nomad 正在等待容量并自动重试（blocked eval），页面会持续跟踪。',
+  'deploy.driverWarnDocker':
+    '警告：当前没有 ready 节点报告已检测到 docker 驱动，提交后很可能出现 “missing drivers”。请先在节点安装 Docker，或改用 exec / raw_exec 任务。',
   'deploy.phase.submitted': '已提交',
   'deploy.phase.evaluating': '评估中',
   'deploy.phase.placing': '放置中',

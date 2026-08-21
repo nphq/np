@@ -113,6 +113,8 @@ export namespace nomad {
     disk: number
     diskTotal: number
     runningAllocs: number
+    /** 节点已指纹检测到的任务驱动（Detected=true） */
+    drivers?: string[]
   }
 
   // --- 负载 DTO＼�---

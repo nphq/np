@@ -25,12 +25,15 @@
     validateNamespace,
     type DockerFormIssues,
   } from '../../utils/validate'
+  import { clusterHasDriver } from '../../utils/drivers'
   import type { MessageKey } from '../../i18n/dictionaries/zh'
+  import type { nomad } from '../../types/wails'
 
   let {
     busy,
     presetAppId = null,
     existingJobIDs = [],
+    nodes = [],
     onRun,
     onDone,
     onBrowseApps,
@@ -38,6 +41,7 @@
     busy: boolean
     presetAppId?: string | null
     existingJobIDs?: string[]
+    nodes?: nomad.NodeSummary[]
     onRun: (input: RunJobInput) => Promise<RunJobOutcome>
     onDone: (jobID: string) => void
     onBrowseApps?: () => void
@@ -224,6 +228,13 @@
     }
     if (willOverwrite()) {
       body += '\n\n' + t('runJob.confirmOverwrite', { jobID: pendingJobID() })
+    }
+    const needsDocker =
+      tab === 'form' ||
+      (tab === 'advanced' && activeStarter === 'docker') ||
+      /\bdriver\s*=\s*"docker"/i.test(pending.spec)
+    if (needsDocker && nodes.length > 0 && !clusterHasDriver(nodes, 'docker')) {
+      body += '\n\n' + t('deploy.driverWarnDocker')
     }
     return body
   }

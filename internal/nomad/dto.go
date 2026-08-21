@@ -167,6 +167,8 @@ type NodeSummary struct {
 	Disk                  float64 `json:"disk"` // 已用 MB
 	DiskTotal             float64 `json:"diskTotal"`
 	RunningAllocs         int     `json:"runningAllocs"`
+	// Drivers 是节点已指纹检测到的任务驱动名（Detected=true），用于部署前校验。
+	Drivers []string `json:"drivers,omitempty"`
 }
 
 // --- 负载 DTO---

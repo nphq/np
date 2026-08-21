@@ -44,6 +44,22 @@ func TestMapNodeListStub_NilNodeResources(t *testing.T) {
 	}
 }
 
+func TestMapNodeListStub_DetectedDrivers(t *testing.T) {
+	stub := &api.NodeListStub{
+		ID: "node-1",
+		Drivers: map[string]*api.DriverInfo{
+			"docker":   {Detected: true, Healthy: true},
+			"exec":     {Detected: true, Healthy: true},
+			"raw_exec": {Detected: false},
+			"java":     nil,
+		},
+	}
+	got := mapNodeListStub(stub)
+	if len(got.Drivers) != 2 || got.Drivers[0] != "docker" || got.Drivers[1] != "exec" {
+		t.Fatalf("Drivers = %v, want [docker exec]", got.Drivers)
+	}
+}
+
 func TestMapAllocListStub_DeclaredResources(t *testing.T) {
 	stub := &api.AllocationListStub{
 		ID:            "alloc-1",

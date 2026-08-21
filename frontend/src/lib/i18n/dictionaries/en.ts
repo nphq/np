@@ -225,6 +225,8 @@ const en = {
   'nodes.col.job': 'Job',
   'nodes.sparkCpuHistory': 'CPU MHz history ({used} of {cap})',
   'nodes.sparkMemHistory': 'Memory MB history ({used} of {cap})',
+  'nodes.drivers': 'Detected drivers',
+  'nodes.driversNone': 'None reported',
 
   'jobs.title': 'Jobs',
   'jobs.subtitle': 'paginated list · select the page to bulk purge',
@@ -301,8 +303,12 @@ const en = {
     'Placement or startup failed. Open Alloc Logs for task events and stdout/stderr.',
   'deploy.placementHint':
     'Placement failed: no node met the requirements (e.g. missing driver or unmet constraint), so no allocation was created and there are no logs to inspect yet. Check the reason above.',
+  'deploy.missingDriversHint':
+    'Missing task driver: no eligible node detected the driver this job needs (most catalog apps require Docker). Install and start Docker Engine on client nodes so the docker plugin is healthy, or deploy a native exec / raw_exec job instead.',
   'deploy.retryingHint':
     'Placement not successful yet — Nomad is waiting for capacity and retrying automatically (blocked eval).',
+  'deploy.driverWarnDocker':
+    'Warning: no ready node reports a detected docker driver. This job will likely fail with “missing drivers”. Install Docker on clients, or switch to an exec / raw_exec job.',
   'deploy.phase.submitted': 'Submitted',
   'deploy.phase.evaluating': 'Evaluating',
   'deploy.phase.placing': 'Placing',

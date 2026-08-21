@@ -69,6 +69,10 @@ export function createClustersStore() {
   // 也会被后续 refresh 隐式作废（epoch 语义）。
   const epoch = createEpoch()
 
+  // 列表尚空（或 refresh 尚未合入）时到达的 health 事件先缓存，合入后再刷。
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 非 UI 缓冲，不需响应式 Map
+  const pendingHealth = new Map<string, ClusterHealthPayload>()
+
   // 订阅后端 cluster.health 事件；payload 自带 clusterID。
   Events.On('cluster.health', (ev) => {
     const p = ev.data as ClusterHealthPayload | null
@@ -77,12 +81,56 @@ export function createClustersStore() {
   })
 
   function applyHealth(p: ClusterHealthPayload): void {
-    const item = state.clusters.find((c) => c.info.id === p.clusterID)
-    if (!item) return
-    item.info.health = p.status
-    if (p.lastChecked !== undefined) item.info.lastChecked = p.lastChecked
-    if (p.leader !== undefined) item.leader = p.leader
-    if (p.version !== undefined) item.version = p.version
+    const idx = state.clusters.findIndex((c) => c.info.id === p.clusterID)
+    if (idx < 0) {
+      pendingHealth.set(p.clusterID, p)
+      return
+    }
+    pendingHealth.delete(p.clusterID)
+    const cur = state.clusters[idx]
+    // 用更新时间戳拒绝过期探测结果覆盖更新状态。
+    if (
+      p.lastChecked !== undefined &&
+      cur.info.lastChecked !== undefined &&
+      p.lastChecked < cur.info.lastChecked
+    ) {
+      return
+    }
+    const next: ClusterListItem = {
+      ...cur,
+      leader: p.leader ?? cur.leader,
+      version: p.version ?? cur.version,
+      info: {
+        ...cur.info,
+        health: p.status,
+        lastChecked: p.lastChecked ?? cur.info.lastChecked,
+      },
+    }
+    // 替换数组项以触发 Svelte 5 对 {#each} / $derived 的可靠更新。
+    state.clusters = [...state.clusters.slice(0, idx), next, ...state.clusters.slice(idx + 1)]
+  }
+
+  function mergeClusterItem(info: nomad.ClusterInfo, prev?: ClusterListItem): ClusterListItem {
+    if (!prev) return { info }
+    const prevChecked = prev.info.lastChecked ?? 0
+    const nextChecked = info.lastChecked ?? 0
+    // refresh 快照可能早于其间到达的 health/TestConnection：保留更新的健康字段。
+    if (prevChecked > nextChecked && prev.info.health && prev.info.health !== 'unknown') {
+      return {
+        leader: prev.leader,
+        version: prev.version,
+        info: {
+          ...info,
+          health: prev.info.health,
+          lastChecked: prev.info.lastChecked,
+        },
+      }
+    }
+    return {
+      info,
+      leader: prev.leader,
+      version: prev.version,
+    }
   }
 
   async function refresh(): Promise<void> {
@@ -96,9 +144,15 @@ export function createClustersStore() {
         return
       }
       const list = res as nomad.ClusterList
-      state.clusters = list.clusters.map((info) => ({ info }))
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- 一次性合并索引
+      const prevByID = new Map(state.clusters.map((c) => [c.info.id, c]))
+      state.clusters = list.clusters.map((info) => mergeClusterItem(info, prevByID.get(info.id)))
       // activeID 以服务端为准（含启动恢复 + 删除回退，前端不做本地双源）
       state.activeID = list.activeID || null
+      // 刷新前缓冲的 health 事件（列表尚无该项时）此时合入。
+      if (pendingHealth.size > 0) {
+        for (const p of [...pendingHealth.values()]) applyHealth(p)
+      }
     } catch (err) {
       if (epoch.active(mine)) console.error('[clusters] refresh failed:', err)
     } finally {
@@ -246,12 +300,13 @@ export function createClustersStore() {
         return
       }
       const h = res as nomad.ClusterHealth
-      const item = state.clusters.find((c) => c.info.id === id)
-      if (item) {
-        item.info.health = h.status
-        if (h.leader) item.leader = h.leader
-        if (h.version) item.version = h.version
-      }
+      applyHealth({
+        clusterID: id,
+        status: h.status,
+        leader: h.leader || undefined,
+        version: h.version || undefined,
+        lastChecked: Math.floor(Date.now() / 1000),
+      })
     } catch (err) {
       console.error('[clusters] testConnection failed:', err)
     }
