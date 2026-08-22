@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/hashicorp/nomad/api v0.0.0-20260812182241-5c8612bba6eb
-	github.com/wailsapp/wails/v3 v3.0.0-beta.11
+	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 )
 
