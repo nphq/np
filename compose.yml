@@ -1,0 +1,16 @@
+# Nomad Panel (np) local playground.
+#
+#   docker compose up -d     # then add cluster http://127.0.0.1:4646 in the panel
+#
+# Runs a Nomad dev agent (server + client) with the docker driver wired to the
+# host Docker socket, so container jobs (e.g. nginx) can be scheduled locally.
+services:
+  nomad:
+    image: hashicorp/nomad:2.0.5
+    command: ["agent", "-dev", "-config", "/etc/nomad.d/nomad-dev.hcl", "-bind", "0.0.0.0"]
+    ports:
+      - "4646:4646"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./compose/nomad-dev.hcl:/etc/nomad.d/nomad-dev.hcl:ro
+    restart: unless-stopped

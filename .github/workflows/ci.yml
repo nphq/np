@@ -58,9 +58,8 @@ jobs:
 
       - name: bun audit
         working-directory: frontend
-        # 先观察不阻塞（review.md 1.3.3e）；有高危再收紧
-        continue-on-error: true
-        run: bun audit --severity high
+        # 高危漏洞阻断（2026-08 收紧：vite 链 + vitest 3 升级后 0 漏洞）
+        run: bun audit --audit-level=high
 
       - name: Go vet
         run: go vet ./...

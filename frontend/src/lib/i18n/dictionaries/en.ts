@@ -141,6 +141,8 @@ const en = {
   'cluster.namespace': 'Namespace',
   'cluster.token': 'ACL Token',
   'cluster.tokenKeepHint': 'leave blank to keep the existing token',
+  'cluster.legacyTokenTip':
+    'Legacy credentials detected (old keychain service nomad-manager). Edit the cluster and save again to migrate.',
   'cluster.tokenSaved': '✓ Token saved in OS keychain — leave blank to keep',
   'cluster.placeholderId': 'my-cluster',
   'cluster.placeholderName': 'My Cluster',

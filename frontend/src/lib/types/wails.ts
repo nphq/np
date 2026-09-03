@@ -56,6 +56,8 @@ export namespace nomad {
     tls: boolean
     insecureSkipVerify: boolean
     hasToken: boolean
+    /** 品牌统一前的旧 Keychain service 里有 token，等待编辑重录迁移 */
+    hasLegacyToken?: boolean
     health: string
     lastChecked: number
     pinned: boolean

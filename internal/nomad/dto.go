@@ -13,10 +13,12 @@ type ClusterInfo struct {
 	TLS                bool   `json:"tls"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
 	HasToken           bool   `json:"hasToken"` // Keychain 里是否有 token（不暴露 token 本身）
-	Health             string `json:"health"`   // "unknown" | "ok" | "down"
-	LastChecked        int64  `json:"lastChecked"`
-	Pinned             bool   `json:"pinned"` // 收藏/置顶
-	SortOrder          int    `json:"sortOrder"`
+	// HasLegacyToken：品牌统一前的旧 service 里存有 token，等待用户编辑重录完成迁移。
+	HasLegacyToken bool   `json:"hasLegacyToken,omitempty"`
+	Health         string `json:"health"` // "unknown" | "ok" | "down"
+	LastChecked    int64  `json:"lastChecked"`
+	Pinned         bool   `json:"pinned"` // 收藏/置顶
+	SortOrder      int    `json:"sortOrder"`
 }
 
 // ClusterList 是 ListClusters 的响应：集群列表（已按 §3.1 排序）+ 活跃集群 ID。

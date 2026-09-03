@@ -146,6 +146,8 @@ const zh = {
   'cluster.namespace': 'Namespace',
   'cluster.token': 'ACL Token',
   'cluster.tokenKeepHint': '留空则保留已有 token',
+  'cluster.legacyTokenTip':
+    '检测到品牌统一前的旧版凭据（Keychain 服务 nomad-manager）。编辑集群并重新保存即可迁移到新条目。',
   'cluster.tokenSaved': '✓ Token 已存入系统钥匙串 —— 留空即保留',
   'cluster.placeholderId': 'my-cluster',
   'cluster.placeholderName': 'My Cluster',

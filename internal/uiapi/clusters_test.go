@@ -2,6 +2,7 @@ package uiapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,29 @@ import (
 	"github.com/nphq/np/internal/config"
 	"github.com/nphq/np/internal/secure"
 )
+
+// failingKeyring 包装 MemoryKeyring，仅让 SaveToken 失败（模拟 Keychain 不可用）。
+type failingKeyring struct {
+	secure.Keyring
+}
+
+func (f failingKeyring) SaveToken(_, _ string) error {
+	return errors.New("keychain unavailable")
+}
+
+// legacyProbeKeyring 模拟"品牌统一前旧 service 里有 token"的 OSKeyring
+// （实现 GetLegacyToken 但不持有新 token）。
+type legacyProbeKeyring struct {
+	secure.Keyring
+	legacy string // 非空 = 旧 service 有 token
+}
+
+func (l legacyProbeKeyring) GetLegacyToken(_ string) (string, error) {
+	if l.legacy != "" {
+		return l.legacy, nil
+	}
+	return "", secure.ErrTokenNotFound
+}
 
 func readFile(t *testing.T, path string) ([]byte, error) {
 	t.Helper()
@@ -71,6 +95,70 @@ func TestAddClusterValidation(t *testing.T) {
 		if err := svc.AddCluster(c); err == nil {
 			t.Errorf("case %d: want validation error", i)
 		}
+	}
+}
+
+// TestAddClusterRollsBackOnTokenSaveFailure 验证 token 入 Keychain 失败时配置被回滚：
+// 不残留"添加失败但集群已存在"的无 token 死集群（review C3）。
+func TestAddClusterRollsBackOnTokenSaveFailure(t *testing.T) {
+	store := config.New(filepath.Join(t.TempDir(), "clusters.json"))
+	kr := failingKeyring{Keyring: secure.NewMemory()}
+	prefs := config.NewPrefs(filepath.Join(t.TempDir(), "preferences.json"))
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	svc := NewClusterService(store, prefs, kr)
+
+	err := svc.AddCluster(ClusterInput{ID: "dev-1", Name: "Dev", Address: "http://x:4646", Token: "secret"})
+	if err == nil {
+		t.Fatal("want token save error")
+	}
+	if err.Code != CodeInternal {
+		t.Fatalf("code = %v, want CodeInternal", err.Code)
+	}
+	if _, gErr := store.Get("dev-1"); gErr == nil {
+		t.Fatal("config should be rolled back after token save failure")
+	}
+}
+
+// TestListClustersDetectsLegacyToken 验证无新 token 但旧 service 有 token 时，
+// ClusterInfo.HasLegacyToken=true（前端据此提示用户编辑重录完成迁移，review C2）。
+func TestListClustersDetectsLegacyToken(t *testing.T) {
+	store := config.New(filepath.Join(t.TempDir(), "clusters.json"))
+	kr := legacyProbeKeyring{Keyring: secure.NewMemory(), legacy: "old-secret"}
+	prefs := config.NewPrefs(filepath.Join(t.TempDir(), "preferences.json"))
+	if err := prefs.Load(); err != nil {
+		t.Fatalf("prefs Load: %v", err)
+	}
+	svc := NewClusterService(store, prefs, kr)
+	// 无 token 添加（模拟旧版本用户：凭据只存在旧 service）
+	if err := svc.AddCluster(ClusterInput{ID: "dev-1", Name: "Dev", Address: "http://x:4646"}); err != nil {
+		t.Fatalf("AddCluster: %v", err)
+	}
+
+	list, e := svc.ListClusters()
+	if e != nil {
+		t.Fatalf("ListClusters: %v", e)
+	}
+	if len(list.Clusters) != 1 {
+		t.Fatalf("clusters = %d, want 1", len(list.Clusters))
+	}
+	c := list.Clusters[0]
+	if c.HasToken {
+		t.Fatal("HasToken = true, want false (new keychain empty)")
+	}
+	if !c.HasLegacyToken {
+		t.Fatal("HasLegacyToken = false, want true (legacy service has token)")
+	}
+
+	// 新 token 落库后旧标记应消失
+	if err := svc.keyring.SaveToken("dev-1", "new-secret"); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+	list, _ = svc.ListClusters()
+	if !list.Clusters[0].HasToken || list.Clusters[0].HasLegacyToken {
+		t.Fatalf("after save: hasToken=%v hasLegacy=%v, want true/false",
+			list.Clusters[0].HasToken, list.Clusters[0].HasLegacyToken)
 	}
 }
 

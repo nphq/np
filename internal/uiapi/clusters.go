@@ -178,8 +178,13 @@ func (s *ClusterService) clusterInfo(c *config.ClusterConfig) nomad.ClusterInfo 
 		Health:             "unknown",
 	}
 	// HasToken：Keychain 是否存有 token。不暴露 token 本身。
+	// 无新 token 时探测品牌统一前的旧 service：命中则提示用户重录迁移（review C2）。
 	if _, err := s.keyring.GetToken(c.ID); err == nil {
 		info.HasToken = true
+	} else if prober, ok := s.keyring.(legacyKeyringProber); ok {
+		if _, err := prober.GetLegacyToken(c.ID); err == nil {
+			info.HasLegacyToken = true
+		}
 	}
 	if u, ok := s.monitor.Latest(c.ID); ok {
 		info.Health = u.Status
@@ -188,7 +193,15 @@ func (s *ClusterService) clusterInfo(c *config.ClusterConfig) nomad.ClusterInfo 
 	return info
 }
 
+// legacyKeyringProber 是能从品牌统一前 service（secure.LegacyServiceName）读 token 的
+// Keyring 实现（仅 OSKeyring）。MemoryKeyring 与测试 mock 不实现它 → 探测自然跳过。
+type legacyKeyringProber interface {
+	GetLegacyToken(clusterID string) (string, error)
+}
+
 // AddCluster 新增集群：校验 → 落盘配置 → token 入 Keychain。
+// token 入 Keychain 失败时回滚配置：不留无 token 的死集群（review C3）。
+// 回滚本身失败时返回 CodeInternal（两个错误都带上，便于排障）。
 func (s *ClusterService) AddCluster(in ClusterInput) *Error {
 	in.applyEnvToken()
 	if e := in.Validate(); e != nil {
@@ -208,10 +221,14 @@ func (s *ClusterService) AddCluster(in ClusterInput) *Error {
 	if err := s.cfg.Add(cfg); err != nil {
 		return Wrap(err)
 	}
-	// token 入库失败不回滚配置（可后补），但返回警告
 	if in.Token != "" {
 		if err := s.keyring.SaveToken(in.ID, in.Token); err != nil {
-			return NewError(CodeInternal, "config saved, but token save failed: %v", err)
+			// 回滚配置，避免残留"添加失败但集群已存在"的无 token 死集群
+			if rbErr := s.cfg.Delete(in.ID); rbErr != nil {
+				return NewError(CodeInternal,
+					"token save failed: %v; and config rollback failed: %v", err, rbErr)
+			}
+			return NewError(CodeInternal, "token save failed: %v (config rolled back)", err)
 		}
 	}
 	return nil

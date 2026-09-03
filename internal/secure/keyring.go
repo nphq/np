@@ -8,9 +8,12 @@ import (
 )
 
 // ServiceName 是 Keychain 中统一的服务名（品牌短名 np）。
-// 旧版本使用 "nomad-manager" 作为 service；历史 token 不会自动迁移，
-// 升级后需在编辑集群时重新录入（MVP 阶段接受，见 review 建议）。
 const ServiceName = "np"
+
+// LegacyServiceName 是品牌统一前（2026-08 之前）使用的旧 service 名。
+// 旧 token 不自动迁移（读旧写新需要 OS 交互）；ClusterService 探测到旧条目后
+// 通过 hasLegacyToken 提示用户在编辑集群时重新保存即可迁移（review C2）。
+const LegacyServiceName = "nomad-manager"
 
 var (
 	ErrTokenNotFound = errors.New("token not found")
@@ -71,4 +74,21 @@ func (k *OSKeyring) DeleteToken(clusterID string) error {
 		return fmt.Errorf("keyring delete: %w", err)
 	}
 	return nil
+}
+
+// GetLegacyToken 从品牌统一前的旧 service（LegacyServiceName）读取 token。
+// 仅供 ClusterService 探测"旧凭据待迁移"用，不参与正常读写路径；
+// 无旧条目返回 ErrTokenNotFound。
+func (k *OSKeyring) GetLegacyToken(clusterID string) (string, error) {
+	if clusterID == "" {
+		return "", errors.New("clusterID is required")
+	}
+	token, err := keyring.Get(LegacyServiceName, clusterID)
+	if err != nil {
+		if errors.Is(err, keyring.ErrNotFound) {
+			return "", ErrTokenNotFound
+		}
+		return "", fmt.Errorf("keyring get (legacy): %w", err)
+	}
+	return token, nil
 }

@@ -41,6 +41,7 @@
   let showAddDialog = $state(false)
   let editTarget = $state<ClusterInput | null>(null)
   let editHasToken = $state(false)
+  let editHasLegacyToken = $state(false)
   let confirmRemove = $state<string | null>(null)
 
   onMount(() => {
@@ -122,6 +123,7 @@
     if (!item) return
     const info = item.info
     editHasToken = info.hasToken
+    editHasLegacyToken = info.hasLegacyToken ?? false
     editTarget = {
       id: info.id,
       name: info.name,
@@ -221,6 +223,13 @@
               <span class="flex min-w-0 items-center gap-2">
                 <span class={`h-2 w-2 shrink-0 rounded-full ${healthDot(c.health)}`}></span>
                 <span class="truncate">{c.name || c.id}</span>
+                {#if c.hasLegacyToken}
+                  <span
+                    class="shrink-0 text-amber-400"
+                    title={t('cluster.legacyTokenTip')}
+                    aria-label={t('cluster.legacyTokenTip')}>⚠</span
+                  >
+                {/if}
               </span>
               <span class="flex shrink-0 items-center">
                 <span
@@ -552,10 +561,12 @@
       mode="edit"
       initial={editTarget}
       hasToken={editHasToken}
+      hasLegacyToken={editHasLegacyToken}
       onSubmit={onEdit}
       onClose={() => {
         editTarget = null
         editHasToken = false
+        editHasLegacyToken = false
       }}
     />
   {/if}

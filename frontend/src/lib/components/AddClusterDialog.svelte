@@ -22,6 +22,7 @@
     mode = 'add' as Mode,
     initial = new ClusterInput(),
     hasToken = false,
+    hasLegacyToken = false,
     discovered = [] as uiapi.DiscoveredCluster[],
     onSubmit,
     onClose,
@@ -29,6 +30,7 @@
     mode?: Mode
     initial?: ClusterInput
     hasToken?: boolean
+    hasLegacyToken?: boolean
     discovered?: uiapi.DiscoveredCluster[]
     onSubmit: (input: ClusterInput) => Promise<boolean | SubmitResult>
     onClose: () => void
@@ -327,6 +329,9 @@
       {/if}
       {#if mode === 'edit' && hasToken}
         <div class="-mt-1 text-[10px] text-emerald-500/80">{t('cluster.tokenSaved')}</div>
+      {/if}
+      {#if mode === 'edit' && hasLegacyToken && !hasToken}
+        <div class="-mt-1 text-[10px] text-amber-500/90">{t('cluster.legacyTokenTip')}</div>
       {/if}
 
       <label class="flex items-center gap-2 text-xs text-zinc-400">
