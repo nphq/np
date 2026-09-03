@@ -33,11 +33,11 @@ func (s *JobsService) ListJobs(ctx context.Context, clusterID string) ([]nomad.J
 	if err := ValidateClusterID(clusterID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	jobs, err := nomad.ListJobs(ctx, client)
+	jobs, err := nomad.ListJobs(ctx, client, ns)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -52,11 +52,11 @@ func (s *JobsService) GetJob(ctx context.Context, clusterID, jobID string) (*nom
 	if err := ValidateJobID(jobID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	detail, err := nomad.GetJob(ctx, client, jobID)
+	detail, err := nomad.GetJob(ctx, client, jobID, ns)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -72,11 +72,11 @@ func (s *JobsService) ListJobAllocations(ctx context.Context, clusterID, jobID s
 	if err := ValidateJobID(jobID); err != nil {
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	allocs, err := nomad.ListJobAllocations(ctx, client, jobID)
+	allocs, err := nomad.ListJobAllocations(ctx, client, jobID, ns)
 	if err != nil {
 		return nil, Wrap(err)
 	}
@@ -107,9 +107,13 @@ func (s *JobsService) RunJob(ctx context.Context, clusterID, spec, format, names
 		return nil, NewError(CodeInvalidInput, "%v", err)
 	}
 
-	client, err := s.pool.Get(clusterID)
+	client, clusterNS, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return nil, Wrap(err)
+	}
+	// namespace 形参为空时回退集群默认 namespace（review：集群配置需真实生效）
+	if namespace == "" {
+		namespace = clusterNS
 	}
 	job, err := nomad.ParseJobSpec(client, spec, format, canonicalize)
 	if err != nil {
@@ -137,11 +141,11 @@ func (s *JobsService) StopJob(ctx context.Context, clusterID, jobID string, purg
 	if err := ValidateJobID(jobID); err != nil {
 		return "", NewError(CodeInvalidInput, "%v", err)
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.DeregisterJob(ctx, client, jobID, purge)
+	evalID, err := nomad.DeregisterJob(ctx, client, jobID, purge, ns)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -156,11 +160,11 @@ func (s *JobsService) EvaluateJob(ctx context.Context, clusterID, jobID string) 
 	if err := ValidateJobID(jobID); err != nil {
 		return "", NewError(CodeInvalidInput, "%v", err)
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.ForceEvaluateJob(ctx, client, jobID)
+	evalID, err := nomad.ForceEvaluateJob(ctx, client, jobID, ns)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -181,11 +185,11 @@ func (s *JobsService) ScaleJob(ctx context.Context, clusterID, jobID, group stri
 	if count < 0 {
 		return "", NewError(CodeInvalidInput, "count must be >= 0")
 	}
-	client, err := s.pool.Get(clusterID)
+	client, ns, err := s.pool.GetNS(clusterID)
 	if err != nil {
 		return "", Wrap(err)
 	}
-	evalID, err := nomad.ScaleJob(ctx, client, jobID, group, count)
+	evalID, err := nomad.ScaleJob(ctx, client, jobID, group, count, ns)
 	if err != nil {
 		return "", Wrap(err)
 	}
@@ -289,4 +293,22 @@ func (s *JobsService) GetAllocLogs(ctx context.Context, clusterID, allocID, task
 		return nil, Wrap(err)
 	}
 	return logs, nil
+}
+
+// ListAllocations 返回集群内的全量 allocation（跨 job；按集群 namespace 过滤）。
+// Allocs 页数据源：包含 running/complete/failed 等所有状态
+// （区别于 loads cache 仅覆盖 running 且受 MaxAllocStats 上限约束）。
+func (s *JobsService) ListAllocations(ctx context.Context, clusterID string) ([]nomad.AllocSummary, *Error) {
+	if err := ValidateClusterID(clusterID); err != nil {
+		return nil, NewError(CodeInvalidInput, "%v", err)
+	}
+	client, ns, err := s.pool.GetNS(clusterID)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	allocs, err := nomad.ListAllocations(ctx, client, ns)
+	if err != nil {
+		return nil, Wrap(err)
+	}
+	return allocs, nil
 }

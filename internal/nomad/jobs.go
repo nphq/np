@@ -12,6 +12,11 @@ import (
 // 本文件是 nomad/api SDK → DTO 的纯函数映射层，无状态、可单测。
 // 隔离 SDK 类型漂移（report §18 ADR-2）：所有 SDK struct 字段都是指针，
 // 这里集中处理 deref；上层只消费稳定的 DTO。
+//
+// namespace 参数：job 的 ID 按 namespace 隔离，查询/写入必须带目标 namespace，
+// 否则服务端回退 default（集群配置的 acfg.Namespace 不会自动传导到请求——
+// SDK 只在 Query/WriteOptions.Namespace 非空时注入参数）。namespace 为空时
+// 不设置参数，行为与旧版一致（= default）。
 
 // strDeref 安全解引用 *string。
 func strDeref(p *string) string {
@@ -40,8 +45,8 @@ func uint64Deref(p *uint64) uint64 {
 // ListJobs 拉取 job 列表并映射为 []JobSummary。
 // 每个 stub 的运行态计数来自 JobSummary.Summary（按 task group 聚合）；
 // nil JobSummary（periodic / parameterized 罕见情况）返回零计数。
-func ListJobs(ctx context.Context, client *api.Client) ([]JobSummary, error) {
-	stubs, _, err := client.Jobs().List((&api.QueryOptions{}).WithContext(ctx))
+func ListJobs(ctx context.Context, client *api.Client, namespace string) ([]JobSummary, error) {
+	stubs, _, err := client.Jobs().List((&api.QueryOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", err)
 	}
@@ -75,13 +80,14 @@ func mapJobListStub(s *api.JobListStub) JobSummary {
 // GetJob 拉取单个 job 详情，包含 HCL 定义的 task groups 与对应运行态汇总。
 // 内部两次 API：Info 拿 job 定义 + task group 期望 count，Summary 拿运行态计数。
 // Summary 失败不致命：返回 detail 但 TaskGroups 各状态字段为 0。
-func GetJob(ctx context.Context, client *api.Client, jobID string) (*JobDetail, error) {
-	job, _, err := client.Jobs().Info(jobID, (&api.QueryOptions{}).WithContext(ctx))
+func GetJob(ctx context.Context, client *api.Client, jobID, namespace string) (*JobDetail, error) {
+	opts := (&api.QueryOptions{Namespace: namespace}).WithContext(ctx)
+	job, _, err := client.Jobs().Info(jobID, opts)
 	if err != nil {
 		return nil, fmt.Errorf("get job %s: %w", jobID, err)
 	}
 	summary := map[string]api.TaskGroupSummary{}
-	if js, _, sErr := client.Jobs().Summary(jobID, (&api.QueryOptions{}).WithContext(ctx)); sErr == nil && js != nil {
+	if js, _, sErr := client.Jobs().Summary(jobID, opts); sErr == nil && js != nil {
 		summary = js.Summary
 	}
 	return mapJobDetail(job, summary), nil
@@ -137,8 +143,8 @@ func mapJobDetail(job *api.Job, summary map[string]api.TaskGroupSummary) *JobDet
 
 // ListJobAllocations 拉取 job 下的分配列表。
 // allAllocs=false：只返回最近一次 evaluation 的 allocs（不含历史 replacement）。
-func ListJobAllocations(ctx context.Context, client *api.Client, jobID string) ([]AllocSummary, error) {
-	allocs, _, err := client.Jobs().Allocations(jobID, false, (&api.QueryOptions{}).WithContext(ctx))
+func ListJobAllocations(ctx context.Context, client *api.Client, jobID, namespace string) ([]AllocSummary, error) {
+	allocs, _, err := client.Jobs().Allocations(jobID, false, (&api.QueryOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list allocations for job %s: %w", jobID, err)
 	}
@@ -224,8 +230,8 @@ func RegisterJob(ctx context.Context, client *api.Client, job *api.Job, namespac
 }
 
 // DeregisterJob 停止 job（purge=true 同时清除历史记录），返回 EvalID。
-func DeregisterJob(ctx context.Context, client *api.Client, jobID string, purge bool) (string, error) {
-	evalID, _, err := client.Jobs().Deregister(jobID, purge, (&api.WriteOptions{}).WithContext(ctx))
+func DeregisterJob(ctx context.Context, client *api.Client, jobID string, purge bool, namespace string) (string, error) {
+	evalID, _, err := client.Jobs().Deregister(jobID, purge, (&api.WriteOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("deregister job %s: %w", jobID, err)
 	}
@@ -233,8 +239,8 @@ func DeregisterJob(ctx context.Context, client *api.Client, jobID string, purge 
 }
 
 // ForceEvaluateJob 强制重新评估 job，返回 EvalID。
-func ForceEvaluateJob(ctx context.Context, client *api.Client, jobID string) (string, error) {
-	evalID, _, err := client.Jobs().ForceEvaluate(jobID, (&api.WriteOptions{}).WithContext(ctx))
+func ForceEvaluateJob(ctx context.Context, client *api.Client, jobID, namespace string) (string, error) {
+	evalID, _, err := client.Jobs().ForceEvaluate(jobID, (&api.WriteOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("force evaluate job %s: %w", jobID, err)
 	}
@@ -242,8 +248,8 @@ func ForceEvaluateJob(ctx context.Context, client *api.Client, jobID string) (st
 }
 
 // ScaleJob 对 task group 扩缩容（PUT /v1/job/{id}/scale），返回 EvalID。
-func ScaleJob(ctx context.Context, client *api.Client, jobID, group string, count int) (string, error) {
-	resp, _, err := client.Jobs().Scale(jobID, group, &count, "scaled from Nomad Panel", false, nil, (&api.WriteOptions{}).WithContext(ctx))
+func ScaleJob(ctx context.Context, client *api.Client, jobID, group string, count int, namespace string) (string, error) {
+	resp, _, err := client.Jobs().Scale(jobID, group, &count, "scaled from Nomad Panel", false, nil, (&api.WriteOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("scale job %s group %s: %w", jobID, group, err)
 	}

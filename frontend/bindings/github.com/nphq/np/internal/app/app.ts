@@ -106,6 +106,13 @@ export function ListAllocTaskEvents(clusterID: string, allocID: string): $Cancel
 }
 
 /**
+ * ListClusterAllocations 返回集群内的全量 allocation（Allocs 页）。
+ */
+export function ListClusterAllocations(clusterID: string): $CancellablePromise<any> {
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ListClusterAllocations", clusterID);
+}
+
+/**
  * ListClusters 返回全部集群及健康状态。
  */
 export function ListClusters(): $CancellablePromise<any> {

@@ -26,7 +26,15 @@ const zh = {
   'app.statusbar.load': '负载',
   'app.statusbar.stale': '过期',
   'app.statusbar.clusterCount': '{n} 个集群',
-  'app.allocsPlaceholder': '分配列表将在后续里程碑中实现。',
+  'allocs.search': '搜索分配 / Job / 节点…',
+  'allocs.filterAll': '全部状态',
+  'allocs.empty': '没有匹配的分配。',
+  'allocs.col.job': 'Job',
+  'allocs.col.group': '任务组',
+  'allocs.col.node': '节点',
+  'allocs.col.status': '状态',
+  'allocs.col.desired': '期望',
+  'allocs.col.allocID': '分配 ID',
 
   // 导航
   'nav.overview': '总览',

@@ -150,3 +150,19 @@ func TestListNodes_SendsResourcesParamAndMapsCapacity(t *testing.T) {
 			n.CPUTotal, n.CPUCores, n.MemoryTotal, n.DiskTotal)
 	}
 }
+
+// TestListAllocations_NamespacePropagates 验证集群 namespace 传导到 /v1/allocations
+// （Allocs 页与负载统计的数据源；review P0：之前不带参数永远只拿 default）。
+func TestListAllocations_NamespacePropagates(t *testing.T) {
+	var gotNS string
+	client := sdkClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotNS = r.URL.Query().Get("namespace")
+		_, _ = w.Write([]byte(`[]`))
+	})
+	if _, err := ListAllocations(context.Background(), client, "dev"); err != nil {
+		t.Fatalf("ListAllocations: %v", err)
+	}
+	if gotNS != "dev" {
+		t.Fatalf("namespace param = %q, want dev", gotNS)
+	}
+}

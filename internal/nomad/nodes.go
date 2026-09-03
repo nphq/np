@@ -61,8 +61,9 @@ func mapNodeListStub(n *api.NodeListStub) NodeSummary {
 
 // ListAllocations 拉取全量 allocation 列表（含 per-task 声明资源与节点归属）。
 // 供 metrics Collector 聚合 allocated 与 running allocs 使用。
-func ListAllocations(ctx context.Context, client *api.Client) ([]AllocSummary, error) {
-	stubs, _, err := client.Allocations().List((&api.QueryOptions{}).WithContext(ctx))
+// namespace 为空时列表仅含 default namespace（服务端语义），与旧版行为一致。
+func ListAllocations(ctx context.Context, client *api.Client, namespace string) ([]AllocSummary, error) {
+	stubs, _, err := client.Allocations().List((&api.QueryOptions{Namespace: namespace}).WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("list allocations: %w", err)
 	}

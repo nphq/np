@@ -85,8 +85,12 @@ func (s *LoadsService) stopLocked() {
 }
 
 // startLocked 为集群构造 Collector（须持 collMu；不启动后台循环）。
+// Namespace 注入集群配置（空则服务端回退 default），负载统计与 job 视图同域。
 func (s *LoadsService) startLocked(clusterID string) *metrics.Collector {
 	cfg := metrics.DefaultConfig(clusterID)
+	if ns, err := s.pool.Namespace(clusterID); err == nil {
+		cfg.Namespace = ns
+	}
 	coll := metrics.NewCollector(cfg, func() (*api.Client, error) {
 		return s.pool.Get(clusterID)
 	}, s.emitLoad)

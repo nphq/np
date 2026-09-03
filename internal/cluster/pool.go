@@ -135,6 +135,32 @@ func (p *Pool) Close() {
 	}
 }
 
+// Namespace 返回集群配置的默认 namespace（空 = 不设置，服务端回退 default）。
+// SDK 的 acfg.Namespace 不会自动传导到请求（只在 Query/WriteOptions.Namespace
+// 非空时注入参数），所以查询/写入前需显式读取并填充（review：集群配置的
+// namespace 之前对 ListJobs/StopJob 等完全不生效）。
+func (p *Pool) Namespace(clusterID string) (string, error) {
+	cfg, err := p.cfg.Get(clusterID)
+	if err != nil {
+		return "", err
+	}
+	return cfg.Namespace, nil
+}
+
+// GetNS 返回集群 client 与配置的默认 namespace，供调用方构造带 namespace 的
+// Query/WriteOptions（job 域操作必须带，否则打到 default namespace）。
+func (p *Pool) GetNS(clusterID string) (*api.Client, string, error) {
+	client, err := p.Get(clusterID)
+	if err != nil {
+		return nil, "", err
+	}
+	ns, err := p.Namespace(clusterID)
+	if err != nil {
+		return nil, "", err
+	}
+	return client, ns, nil
+}
+
 // Invalidate 清除指定集群的缓存 client。下次 Get 会用最新配置/token 重建。
 // 用于 RemoveCluster、Update（未来）等场景，避免返回带旧 token 的 client。
 // 健康探测逻辑见 health.go（Probe + HealthMonitor）。

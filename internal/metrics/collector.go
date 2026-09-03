@@ -42,13 +42,14 @@ type ClientGetter func() (*api.Client, error)
 // Config 是 Collector 的配置。
 type Config struct {
 	ClusterID        string
-	Interval         int64 // 秒，默认 15
-	MaxAllocStats    int   // running allocs 超过则降级为节点级，默认 200
-	ShardCount       int   // A2 分片数，默认 4
-	ShardThreshold   int   // running 达到该值才分片，默认 16
-	NodeConcurrency  int   // A1 并发，默认 8
-	AllocConcurrency int   // A2 并发，默认 4
-	SamplePoints     int   // 每键环形缓冲点数，默认 60
+	Namespace        string // 集群配置的默认 namespace；空 = 服务端回退 default
+	Interval         int64  // 秒，默认 15
+	MaxAllocStats    int    // running allocs 超过则降级为节点级，默认 200
+	ShardCount       int    // A2 分片数，默认 4
+	ShardThreshold   int    // running 达到该值才分片，默认 16
+	NodeConcurrency  int    // A1 并发，默认 8
+	AllocConcurrency int    // A2 并发，默认 4
+	SamplePoints     int    // 每键环形缓冲点数，默认 60
 }
 
 // DefaultConfig 返回生产默认值。
@@ -169,7 +170,7 @@ func (c *Collector) Tick(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load: list nodes: %w", err)
 	}
-	allocs, err := nomad.ListAllocations(ctx, client)
+	allocs, err := nomad.ListAllocations(ctx, client, c.cfg.Namespace)
 	if err != nil {
 		return fmt.Errorf("load: list allocations: %w", err)
 	}

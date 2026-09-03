@@ -5,6 +5,7 @@
   import { createLoadsStore } from './lib/stores/loads.svelte'
   import { createNodesStore } from './lib/stores/nodes.svelte'
   import { createJobsStore } from './lib/stores/jobs.svelte'
+  import { createAllocsStore } from './lib/stores/allocs.svelte'
   import { i18n, t } from './lib/i18n/index.svelte'
   import AddClusterDialog from './lib/components/AddClusterDialog.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
@@ -15,7 +16,6 @@
   // JobSpecEditor）引用，拆包后首包不再含编辑器依赖（~300KB）。
   // lazy() 缓存模块 promise：切走再切回不重新 fetch；返回类型保持具体组件类型，
   // 动态组件的 props 检查不退化。
-  // 'allocs' 页无独立组件（模板里内联占位）。
   function lazy<M>(loader: () => Promise<M>): () => Promise<M> {
     let cached: Promise<M> | undefined
     return () => (cached ??= loader())
@@ -27,6 +27,7 @@
     jobs: lazy(() => import('./lib/components/jobs/JobsScreen.svelte')),
     'job-detail': lazy(() => import('./lib/components/jobs/JobDetailScreen.svelte')),
     'job-run': lazy(() => import('./lib/components/jobs/JobRunScreen.svelte')),
+    allocs: lazy(() => import('./lib/components/allocs/AllocsScreen.svelte')),
     apps: lazy(() => import('./lib/components/apps/AppsScreen.svelte')),
     settings: lazy(() => import('./lib/components/SettingsScreen.svelte')),
   }
@@ -37,6 +38,7 @@
   const loads = createLoadsStore()
   const nodes = createNodesStore()
   const jobs = createJobsStore()
+  const allocs = createAllocsStore()
 
   let showAddDialog = $state(false)
   let editTarget = $state<ClusterInput | null>(null)
@@ -58,6 +60,7 @@
     loads.clear()
     nodes.clear()
     jobs.clear()
+    allocs.clear()
     if (!id) return
     void loads.refresh(id)
     void nodes.refresh(id)
@@ -79,6 +82,14 @@
     const id = clusters.state.activeID
     if (page !== 'job-detail' || !jobID || !id) return
     void jobs.loadDetail(id, jobID)
+  })
+
+  // 进入 allocs 页时拉集群级分配列表。
+  $effect(() => {
+    const page = ui.route.page
+    const id = clusters.state.activeID
+    if (page !== 'allocs' || !id) return
+    void allocs.refresh(id)
   })
 
   const navItems = $derived<{ page: Page; label: string }[]>([
@@ -343,10 +354,17 @@
         {/await}
       {:else if active}
         {#if ui.route.page === 'allocs'}
-          <section class="mx-auto w-full max-w-4xl p-6">
-            <h1 class="text-lg font-semibold">{t('nav.allocs')}</h1>
-            <p class="mt-8 text-xs text-zinc-600">{t('app.allocsPlaceholder')}</p>
-          </section>
+          {#await screens.allocs()}
+            <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>
+          {:then { default: Cmp }}
+            <Cmp
+              allocs={allocs.state.list}
+              loading={allocs.state.loading}
+              busy={jobs.state.busyOp !== null}
+              onRefresh={() => void allocs.refresh(active.info.id)}
+              onSelect={(jobID) => ui.navigate('job-detail', { jobID })}
+            />
+          {/await}
         {:else if ui.route.page === 'overview'}
           {#await screens.overview()}
             <div class="p-6 text-xs text-zinc-600">{t('common.loading')}</div>

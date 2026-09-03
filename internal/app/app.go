@@ -288,6 +288,15 @@ func (a *App) ListNodes(ctx context.Context, clusterID string) (any, error) {
 	return nodes, nil
 }
 
+// ListClusterAllocations 返回集群内的全量 allocation（Allocs 页）。
+func (a *App) ListClusterAllocations(ctx context.Context, clusterID string) (any, error) {
+	allocs, e := a.jobs.ListAllocations(ctx, clusterID)
+	if e != nil {
+		return e, nil
+	}
+	return allocs, nil
+}
+
 // --- loads ---
 
 // GetClusterLoad 返回集群负载聚合快照（Overview 页）。

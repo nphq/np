@@ -285,7 +285,7 @@ func TestDeregisterJob(t *testing.T) {
 		purgeQuery = r.URL.Query().Get("purge")
 		_, _ = w.Write([]byte(`{"EvalID":"e2"}`))
 	})
-	evalID, err := DeregisterJob(context.Background(), client, "demo", true)
+	evalID, err := DeregisterJob(context.Background(), client, "demo", true, "")
 	if err != nil {
 		t.Fatalf("DeregisterJob: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestForceEvaluateJob(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"EvalID":"e3"}`))
 	})
-	evalID, err := ForceEvaluateJob(context.Background(), client, "demo")
+	evalID, err := ForceEvaluateJob(context.Background(), client, "demo", "")
 	if err != nil {
 		t.Fatalf("ForceEvaluateJob: %v", err)
 	}
@@ -335,7 +335,7 @@ func TestScaleJob(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"EvalID":"e4"}`))
 	})
-	evalID, err := ScaleJob(context.Background(), client, "demo", "web", 5)
+	evalID, err := ScaleJob(context.Background(), client, "demo", "web", 5, "")
 	if err != nil {
 		t.Fatalf("ScaleJob: %v", err)
 	}
@@ -375,4 +375,36 @@ func TestStopAlloc(t *testing.T) {
 	if path != "/v1/allocation/alloc-1/stop" {
 		t.Errorf("stop path = %q", path)
 	}
+}
+
+// TestListJobs_NamespacePropagates 验证集群 namespace 传导到请求参数：
+// 回归（review P0）——之前 pool 的 acfg.Namespace 不生效，ListJobs 永远查 default。
+// 空 namespace 时请求不带参数（服务端回退 default，行为同旧版）。
+func TestListJobs_NamespacePropagates(t *testing.T) {
+	t.Run("explicit namespace", func(t *testing.T) {
+		var gotNS string
+		client := sdkClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotNS = r.URL.Query().Get("namespace")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		if _, err := ListJobs(context.Background(), client, "dev"); err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if gotNS != "dev" {
+			t.Fatalf("namespace param = %q, want dev", gotNS)
+		}
+	})
+	t.Run("empty namespace omits param", func(t *testing.T) {
+		var gotRawQuery string
+		client := sdkClient(t, func(w http.ResponseWriter, r *http.Request) {
+			gotRawQuery = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[]`))
+		})
+		if _, err := ListJobs(context.Background(), client, ""); err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if strings.Contains(gotRawQuery, "namespace") {
+			t.Fatalf("unexpected namespace param in %q", gotRawQuery)
+		}
+	})
 }
