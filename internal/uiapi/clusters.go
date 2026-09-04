@@ -125,18 +125,39 @@ func (s *ClusterService) Stop() {
 // Pool 暴露底层客户端池（供 stream / jobs 等服务复用）。
 func (s *ClusterService) Pool() *cluster.Pool { return s.pool }
 
+// SetHealthInterval 热更新健康轮询间隔（秒；越界回落 30s）。
+func (s *ClusterService) SetHealthInterval(sec int) {
+	if sec <= 0 {
+		sec = 30
+	}
+	if s.monitor != nil {
+		s.monitor.SetInterval(time.Duration(sec) * time.Second)
+	}
+}
+
 // ListClusters 返回全部集群（§3.1 排序：Pinned 在前 → SortOrder → Name → ID）
 // 及活跃集群 ID（后端唯一裁决，前端不做本地双源）。
 // 注意：健康数据读 monitor 缓存，不再同步阻塞探测（M1 §7 验收：首屏不卡）。
+// Keychain 查询并行化（上限 8），避免 N 集群串行 IPC 放大尾延迟；结果保序。
 func (s *ClusterService) ListClusters() (nomad.ClusterList, *Error) {
 	cfgs, err := s.cfg.List()
 	if err != nil {
 		return nomad.ClusterList{}, Wrap(err)
 	}
-	out := make([]nomad.ClusterInfo, 0, len(cfgs))
-	for _, c := range sortedConfigs(cfgs) {
-		out = append(out, s.clusterInfo(c))
+	sorted := sortedConfigs(cfgs)
+	out := make([]nomad.ClusterInfo, len(sorted))
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	for i, c := range sorted {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, c *config.ClusterConfig) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			out[i] = s.clusterInfo(c)
+		}(i, c)
 	}
+	wg.Wait()
 	return nomad.ClusterList{
 		Clusters: out,
 		ActiveID: s.ActiveCluster(),
@@ -301,13 +322,21 @@ func (s *ClusterService) probeTarget(clusterID string, target cluster.ProbeTarge
 	if clusterID != "" {
 		s.monitor.Inject(u)
 	}
+	// Namespace 回填配置值，前端详情页无需二次查询。
+	ns := ""
+	if clusterID != "" {
+		if cfg, err := s.cfg.Get(clusterID); err == nil {
+			ns = cfg.Namespace
+		}
+	}
 	if u.Status == "down" {
-		return nomad.ClusterHealth{Status: "down", Error: u.Error}
+		return nomad.ClusterHealth{Status: "down", Error: u.Error, Namespace: ns}
 	}
 	return nomad.ClusterHealth{
-		Status:  "ok",
-		Leader:  u.Leader,
-		Version: u.Version,
+		Status:    "ok",
+		Leader:    u.Leader,
+		Version:   u.Version,
+		Namespace: ns,
 	}
 }
 

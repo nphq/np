@@ -140,8 +140,11 @@ type HealthMonitor struct {
 	mu     sync.RWMutex
 	latest map[string]HealthUpdate // clusterID -> 最近状态
 
-	stop chan struct{}
-	done chan struct{}
+	stop      chan struct{}
+	done      chan struct{}
+	stopOnce  sync.Once
+	started   chan struct{}
+	startOnce sync.Once
 }
 
 // NewHealthMonitor 创建 monitor。interval<=0 默认 30s。单次探测超时固定 5s。
@@ -158,48 +161,91 @@ func NewHealthMonitor(pool *Pool, cfg *config.Store, interval time.Duration, emi
 		latest:   map[string]HealthUpdate{},
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
+		started:  make(chan struct{}),
 	}
+}
+
+// SetInterval 更新轮询间隔（<=0 回落 30s；下一次 tick 生效，Run 循环通过读取最新值实现热更新）。
+func (m *HealthMonitor) SetInterval(d time.Duration) {
+	if d <= 0 {
+		d = 30 * time.Second
+	}
+	m.mu.Lock()
+	m.interval = d
+	m.mu.Unlock()
+}
+
+func (m *HealthMonitor) getInterval() time.Duration {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.interval <= 0 {
+		return 30 * time.Second
+	}
+	return m.interval
 }
 
 // Run 阻塞运行直到 ctx 取消或 Stop。启动时立即探一次，之后每 interval 全量探一次。
 func (m *HealthMonitor) Run(ctx context.Context) {
+	m.startOnce.Do(func() { close(m.started) })
 	defer close(m.done)
 	m.tick(ctx)
-	ticker := time.NewTicker(m.interval)
-	defer ticker.Stop()
 	for {
+		// 每轮重读间隔，支持设置页热更新。
+		timer := time.NewTimer(m.getInterval())
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
 		case <-m.stop:
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			m.tick(ctx)
 		}
 	}
 }
 
-// Stop 同步等待 Run 退出。多次调用安全。
+// Stop 同步等待 Run 退出。多次调用安全；Run 未启动时直接返回不死锁。
 func (m *HealthMonitor) Stop() {
+	m.stopOnce.Do(func() { close(m.stop) })
 	select {
-	case <-m.stop:
+	case <-m.started:
+		// Run 已启动，等待退出；若 ctx 已取消导致已退出则立即返回。
+		select {
+		case <-m.done:
+		case <-time.After(10 * time.Second):
+		}
 	default:
-		close(m.stop)
+		// Run 从未启动，done 永不关闭，直接返回。
 	}
-	<-m.done
 }
 
-// tick 并发探测所有集群。每个集群独立 5s 超时；总体最长约 5s（并行）。
+// tick 并发探测所有集群（上限 8 并发）。每个集群独立 5s 超时；总体最长约 5s（并行）。
 func (m *HealthMonitor) tick(ctx context.Context) {
 	cfgs, err := m.cfg.List()
 	if err != nil {
 		return
 	}
+	sem := make(chan struct{}, 8)
 	var wg sync.WaitGroup
+loop:
 	for _, c := range cfgs {
+		select {
+		case <-ctx.Done():
+			break loop
+		default:
+		}
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			break loop
+		case <-m.stop:
+			break loop
+		}
 		wg.Add(1)
 		go func(c *config.ClusterConfig) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			u := m.probeOne(ctx, c.ID)
 			m.publish(u)
 		}(c)

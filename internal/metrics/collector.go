@@ -111,13 +111,18 @@ func NewCollector(cfg Config, get ClientGetter, emit func(LoadPatch)) *Collector
 }
 
 // Start 立即跑一次 tick，然后按 Interval 周期运行；Stop 后不可复用。
-func (c *Collector) Start() {
+// parent 由调用方（LoadsService.Start 注入的 app ctx）传入，app 取消时
+// 即使 Stop 被遗漏也能退出，避免挂在 context.Background 上泄漏。
+func (c *Collector) Start(parent context.Context) {
 	c.mu.Lock()
 	if c.cancel != nil {
 		c.mu.Unlock()
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	c.cancel = cancel
 	c.done = make(chan struct{})
 	c.mu.Unlock()
@@ -214,7 +219,7 @@ func (c *Collector) Tick(ctx context.Context) error {
 	}
 	hosts := make(map[string]*nomad.NodeStats, len(nodeIDs))
 	var hmu sync.Mutex
-	runParallel(nodeIDs, c.cfg.NodeConcurrency, func(id string) {
+	runParallelCtx(ctx, nodeIDs, c.cfg.NodeConcurrency, func(ctx context.Context, id string) {
 		st, err := nomad.FetchNodeStats(ctx, client, id)
 		hmu.Lock()
 		defer hmu.Unlock()
@@ -244,7 +249,7 @@ func (c *Collector) Tick(ctx context.Context) error {
 	}
 	allocStats := make(map[string]*nomad.AllocStats, len(shardAllocs))
 	var amu sync.Mutex
-	runParallel(shardAllocs, c.cfg.AllocConcurrency, func(a nomad.AllocSummary) {
+	runParallelCtx(ctx, shardAllocs, c.cfg.AllocConcurrency, func(ctx context.Context, a nomad.AllocSummary) {
 		st, err := nomad.FetchAllocStats(ctx, client, a.ID)
 		amu.Lock()
 		defer amu.Unlock()
@@ -276,17 +281,18 @@ func (c *Collector) Tick(ctx context.Context) error {
 
 	// 组装 AllocLoad（单核百分比 → MHz；Pct 相对声明资源）
 	declared := allocDeclaredByTask(allocs)
+	byAlloc := make(map[string]nomad.AllocSummary, len(allocs))
+	for _, a := range allocs {
+		byAlloc[a.ID] = a
+	}
 	allocLoads := make([]nomad.AllocLoad, 0, len(allocStats))
 	for id, st := range allocStats {
 		if st == nil {
 			continue
 		}
 		al := nomad.AllocLoad{AllocID: id, NodeID: allocNode[id], Time: st.Time}
-		for _, a := range allocs {
-			if a.ID == id {
-				al.JobID = a.JobID
-				break
-			}
+		if a, ok := byAlloc[id]; ok {
+			al.JobID = a.JobID
 		}
 		pc := perCore[allocNode[id]]
 		al.Tasks = make(map[string]nomad.TaskUsage, len(st.Tasks))
@@ -333,20 +339,30 @@ func percentToMHz(percent, total float64) float64 {
 	return percent / 100 * total
 }
 
-// runParallel 以 limit 并发执行 fn，等待全部完成。
-func runParallel[T any](items []T, limit int, fn func(T)) {
+// runParallelCtx 以 limit 并发执行 fn，等待全部完成；排队与执行均可被 ctx 取消。
+func runParallelCtx[T any](ctx context.Context, items []T, limit int, fn func(context.Context, T)) {
 	if limit <= 0 {
 		limit = 1
 	}
 	sem := make(chan struct{}, limit)
 	var wg sync.WaitGroup
+loop:
 	for _, it := range items {
+		select {
+		case <-ctx.Done():
+			break loop
+		case sem <- struct{}{}:
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(v T) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			fn(v)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				fn(ctx, v)
+			}
 		}(it)
 	}
 	wg.Wait()

@@ -62,3 +62,48 @@ export class ClusterInput {
         return new ClusterInput($$parsedSource as Partial<ClusterInput>);
     }
 }
+
+/**
+ * SettingsInput 是 UpdateSettings 的前端入参（与 config.AppSettings 同构，
+ * 单独定义避免前端直接依赖 config 包路径变更）。
+ */
+export class SettingsInput {
+    "confirmDestructive": boolean;
+    "autoRestoreActive": boolean;
+    "healthIntervalSec": number;
+    "metricsIntervalSec": number;
+    "defaultRegion": string;
+    "defaultNamespace": string;
+
+    /** Creates a new SettingsInput instance. */
+    constructor($$source: Partial<SettingsInput> = {}) {
+        if (!("confirmDestructive" in $$source)) {
+            this["confirmDestructive"] = false;
+        }
+        if (!("autoRestoreActive" in $$source)) {
+            this["autoRestoreActive"] = false;
+        }
+        if (!("healthIntervalSec" in $$source)) {
+            this["healthIntervalSec"] = 0;
+        }
+        if (!("metricsIntervalSec" in $$source)) {
+            this["metricsIntervalSec"] = 0;
+        }
+        if (!("defaultRegion" in $$source)) {
+            this["defaultRegion"] = "";
+        }
+        if (!("defaultNamespace" in $$source)) {
+            this["defaultNamespace"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SettingsInput instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SettingsInput {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SettingsInput($$parsedSource as Partial<SettingsInput>);
+    }
+}

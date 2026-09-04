@@ -29,6 +29,10 @@ type LoadsService struct {
 	collMu    sync.Mutex
 	coll      *metrics.Collector
 	clusterID string
+
+	// metricsIntervalSec 由设置页写入，新 Collector 生效（存量 Collector 重建）。
+	metricsMu       sync.RWMutex
+	metricsInterval int64
 }
 
 // NewLoadsService 创建负载服务。
@@ -73,7 +77,10 @@ func (s *LoadsService) Activate(clusterID string) {
 		return
 	}
 	s.clusterID = clusterID
-	s.startLocked(clusterID).Start()
+	s.ctxMu.RLock()
+	parent := s.ctx
+	s.ctxMu.RUnlock()
+	s.startLocked(clusterID).Start(parent)
 }
 
 // stopLocked 停掉当前 Collector（须持 collMu）。
@@ -86,16 +93,45 @@ func (s *LoadsService) stopLocked() {
 
 // startLocked 为集群构造 Collector（须持 collMu；不启动后台循环）。
 // Namespace 注入集群配置（空则服务端回退 default），负载统计与 job 视图同域。
+// Interval 取设置页的 metricsInterval（>0 才覆盖默认 15s）。
 func (s *LoadsService) startLocked(clusterID string) *metrics.Collector {
 	cfg := metrics.DefaultConfig(clusterID)
 	if ns, err := s.pool.Namespace(clusterID); err == nil {
 		cfg.Namespace = ns
+	}
+	s.metricsMu.RLock()
+	iv := s.metricsInterval
+	s.metricsMu.RUnlock()
+	if iv > 0 {
+		cfg.Interval = iv
 	}
 	coll := metrics.NewCollector(cfg, func() (*api.Client, error) {
 		return s.pool.Get(clusterID)
 	}, s.emitLoad)
 	s.coll = coll
 	return coll
+}
+
+// SetMetricsInterval 热更新指标轮询间隔（秒；<=0 忽略）。
+// 存量 Collector 下次 Activate 重建时生效；若当前有活跃 Collector 则原地重建。
+func (s *LoadsService) SetMetricsInterval(sec int) {
+	if sec <= 0 {
+		return
+	}
+	s.metricsMu.Lock()
+	s.metricsInterval = int64(sec)
+	s.metricsMu.Unlock()
+	s.collMu.Lock()
+	defer s.collMu.Unlock()
+	if s.coll == nil || s.clusterID == "" {
+		return
+	}
+	id := s.clusterID
+	s.stopLocked()
+	s.ctxMu.RLock()
+	parent := s.ctx
+	s.ctxMu.RUnlock()
+	s.startLocked(id).Start(parent)
 }
 
 // emitLoad 是 Collector 的回调：直接推 LoadPatch 给前端（v3 EmitEvent）。

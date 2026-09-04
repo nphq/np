@@ -19,6 +19,7 @@
 
   let host: HTMLDivElement | undefined = $state()
   let loading = $state(true)
+  let loadError = $state<string | null>(null)
   // $state.raw：异步挂载后要触发 value/lang/theme 同步 effect，且勿代理 EditorView。
   let view = $state.raw<EditorView | undefined>(undefined)
 
@@ -47,55 +48,69 @@
 
   onMount(async () => {
     if (!host) return
-    const [cm, cmState, langJson, theme, langHcl] = await Promise.all([
-      import('codemirror'),
-      import('@codemirror/state'),
-      import('@codemirror/lang-json'),
-      import('@codemirror/theme-one-dark'),
-      import('codemirror-lang-hcl'),
-    ])
-    if (!host) return // 加载期间组件已销毁
-    const d: CMDeps = {
-      EditorView: cm.EditorView,
-      basicSetup: cm.basicSetup,
-      Compartment: cmState.Compartment,
-      EditorState: cmState.EditorState,
-      json: langJson.json,
-      oneDark: theme.oneDark,
-      hcl: langHcl.hcl,
+    try {
+      const [cm, cmState, langJson, theme, langHcl] = await Promise.all([
+        import('codemirror'),
+        import('@codemirror/state'),
+        import('@codemirror/lang-json'),
+        import('@codemirror/theme-one-dark'),
+        import('codemirror-lang-hcl'),
+      ])
+      if (!host) return // 加载期间组件已销毁
+      const d: CMDeps = {
+        EditorView: cm.EditorView,
+        basicSetup: cm.basicSetup,
+        Compartment: cmState.Compartment,
+        EditorState: cmState.EditorState,
+        json: langJson.json,
+        oneDark: theme.oneDark,
+        hcl: langHcl.hcl,
+      }
+      deps = d
+      langComp = new d.Compartment()
+      themeComp = new d.Compartment()
+      view = new d.EditorView({
+        parent: host,
+        state: d.EditorState.create({
+          doc: value,
+          extensions: [
+            d.basicSetup,
+            d.EditorView.lineWrapping,
+            langComp.of(langExtension(d, language)),
+            themeComp.of(themeExtension(d, appearance.resolved)),
+            d.EditorView.theme({
+              '&': { height: '100%', fontSize: '12px' },
+              '.cm-scroller': {
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                lineHeight: '18px',
+              },
+              '.cm-content': { paddingTop: '8px', paddingBottom: '8px' },
+              '.cm-gutters': { border: 'none' },
+              '&.cm-focused': { outline: 'none' },
+            }),
+            d.EditorView.updateListener.of((u) => {
+              if (applying || !u.docChanged) return
+              value = u.state.doc.toString()
+            }),
+          ],
+        }),
+      })
+      loading = false
+    } catch (e) {
+      console.error('[editor] codemirror load failed:', e)
+      loadError = e instanceof Error ? e.message : String(e)
+      loading = false
     }
-    deps = d
-    langComp = new d.Compartment()
-    themeComp = new d.Compartment()
-    view = new d.EditorView({
-      parent: host,
-      state: d.EditorState.create({
-        doc: value,
-        extensions: [
-          d.basicSetup,
-          d.EditorView.lineWrapping,
-          langComp.of(langExtension(d, language)),
-          themeComp.of(themeExtension(d, appearance.resolved)),
-          d.EditorView.theme({
-            '&': { height: '100%', fontSize: '12px' },
-            '.cm-scroller': {
-              fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-              lineHeight: '18px',
-            },
-            '.cm-content': { paddingTop: '8px', paddingBottom: '8px' },
-            '.cm-gutters': { border: 'none' },
-            '&.cm-focused': { outline: 'none' },
-          }),
-          d.EditorView.updateListener.of((u) => {
-            if (applying || !u.docChanged) return
-            value = u.state.doc.toString()
-          }),
-        ],
-      }),
-    })
-    loading = false
   })
+
+  function retry(): void {
+    loadError = null
+    loading = true
+    // 重新触发 onMount 逻辑的最简方式：刷新挂载标记由调用方重挂；
+    // 这里直接 reload 页面外的轻量重试：动态 import 浏览器已缓存，多为网络抖动。
+    window.location.reload()
+  }
 
   onDestroy(() => {
     view?.destroy()
@@ -143,6 +158,20 @@
   {#if loading}
     <div class="absolute inset-0 flex items-center justify-center font-mono text-xs text-zinc-500">
       editor…
+    </div>
+  {/if}
+  {#if loadError}
+    <div
+      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-red-950/90 p-4 text-center"
+    >
+      <p class="font-mono text-xs text-red-300">editor load failed: {loadError}</p>
+      <button
+        type="button"
+        class="rounded border border-red-700 px-2 py-1 text-xs text-red-200 hover:bg-red-900"
+        onclick={retry}
+      >
+        retry
+      </button>
     </div>
   {/if}
   {#if !value && placeholder && !loading}

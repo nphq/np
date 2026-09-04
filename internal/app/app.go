@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -26,29 +26,45 @@ type App struct {
 	jobs     *uiapi.JobsService
 	nodes    *uiapi.NodesService
 	loads    *uiapi.LoadsService
+	settings *uiapi.SettingsService
+	prefs    *config.PrefsStore
 }
 
 // NewApp creates a new App application struct.
+// 配置加载失败仅告警（stderr）不阻断启动：空配置仍可进空状态页添加集群。
 func NewApp() *App {
 	cfg := config.New(config.MustDefaultPath())
 	if err := cfg.Load(); err != nil {
-		fmt.Println("WARN: load config:", err)
+		log.Printf("WARN: load config: %v", err)
 	}
 	prefs := config.NewPrefs(config.MustPrefsPath())
 	if err := prefs.Load(); err != nil {
-		fmt.Println("WARN: load prefs:", err)
+		log.Printf("WARN: load prefs: %v", err)
 	}
 	clusters := uiapi.NewClusterService(cfg, prefs, secure.New())
 	loads := uiapi.NewLoadsService(clusters.Pool())
 	// 负载 Collector 跟随激活集群启停
 	clusters.OnActiveChanged = loads.Activate
-	// 恢复上次活跃集群（prefs 有值且集群仍存在时触发 OnActiveChanged → Loads 拉数）
-	clusters.RestoreActive()
+	settings := uiapi.NewSettingsService(prefs, clusters, loads)
+	// 启动即应用已存轮询间隔（早于 monitor 第一轮探测）。
+	if st, err := prefs.GetSettings(); err == nil {
+		clusters.SetHealthInterval(st.HealthIntervalSec)
+		loads.SetMetricsInterval(st.MetricsIntervalSec)
+		// AutoRestore 关时不恢复上次活跃（保持空状态）。
+		if st.AutoRestoreActive {
+			clusters.RestoreActive()
+		}
+	} else {
+		// 恢复上次活跃集群（prefs 有值且集群仍存在时触发 OnActiveChanged → Loads 拉数）
+		clusters.RestoreActive()
+	}
 	return &App{
 		clusters: clusters,
 		jobs:     uiapi.NewJobsService(clusters.Pool()),
 		nodes:    uiapi.NewNodesService(clusters.Pool(), loads),
 		loads:    loads,
+		settings: settings,
+		prefs:    prefs,
 	}
 }
 
@@ -331,4 +347,41 @@ func (a *App) GetAllocLoad(ctx context.Context, clusterID, allocID string) (any,
 // GetVersion 返回构建时注入的版本号（未注入时为 "dev"）。
 func (a *App) GetVersion() (any, error) {
 	return version.Build(), nil
+}
+
+// --- settings ---
+
+// GetSettings 返回通用设置（归一化默认值）。
+func (a *App) GetSettings() (any, error) {
+	st, e := a.settings.GetSettings()
+	if e != nil {
+		return e, nil
+	}
+	return st, nil
+}
+
+// UpdateSettings 校验并落盘通用设置，同时热更新轮询间隔。
+func (a *App) UpdateSettings(in uiapi.SettingsInput) (any, error) {
+	if e := a.settings.UpdateSettings(in); e != nil {
+		return e, nil
+	}
+	return nil, nil
+}
+
+// ResetSettings 恢复出厂设置并返回。
+func (a *App) ResetSettings() (any, error) {
+	st, e := a.settings.ResetSettings()
+	if e != nil {
+		return e, nil
+	}
+	return st, nil
+}
+
+// GetConfigPaths 返回配置文件路径（诊断/备份用）。
+func (a *App) GetConfigPaths() (any, error) {
+	p, e := a.settings.GetConfigPaths()
+	if e != nil {
+		return e, nil
+	}
+	return p, nil
 }

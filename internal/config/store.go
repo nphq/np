@@ -173,23 +173,48 @@ func (s *Store) ensureLoaded() error {
 }
 
 // List 返回全部集群（ID 排序，拷贝防篡改）。
+// 快路径用 RLock，冷启动才升级写锁，避免阻塞并发读者。
 func (s *Store) List() ([]*ClusterConfig, error) {
+	s.mu.RLock()
+	if s.loaded {
+		out := s.copyLocked()
+		s.mu.RUnlock()
+		return out, nil
+	}
+	s.mu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return nil, err
 	}
+	return s.copyLocked(), nil
+}
+
+// copyLocked 拷贝并排序，需持锁（读或写）。
+func (s *Store) copyLocked() []*ClusterConfig {
 	out := make([]*ClusterConfig, 0, len(s.clusters))
 	for _, c := range s.clusters {
 		cp := *c
 		out = append(out, &cp)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out, nil
+	return out
 }
 
 // Get 按 ID 取集群。
 func (s *Store) Get(id string) (*ClusterConfig, error) {
+	s.mu.RLock()
+	if s.loaded {
+		c, ok := s.clusters[id]
+		if !ok {
+			s.mu.RUnlock()
+			return nil, fmt.Errorf("%w: %s", ErrClusterNotFound, id)
+		}
+		cp := *c
+		s.mu.RUnlock()
+		return &cp, nil
+	}
+	s.mu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {

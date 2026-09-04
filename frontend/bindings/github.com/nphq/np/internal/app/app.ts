@@ -64,6 +64,13 @@ export function GetClusterLoad(clusterID: string): $CancellablePromise<any> {
 }
 
 /**
+ * GetConfigPaths 返回配置文件路径（诊断/备份用）。
+ */
+export function GetConfigPaths(): $CancellablePromise<any> {
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetConfigPaths");
+}
+
+/**
  * GetEvaluation 返回评估状态（部署进度）。
  */
 export function GetEvaluation(clusterID: string, evalID: string): $CancellablePromise<any> {
@@ -82,6 +89,13 @@ export function GetJob(clusterID: string, jobID: string): $CancellablePromise<an
  */
 export function GetNodeLoads(clusterID: string): $CancellablePromise<any> {
     return $Call.ByName("github.com/nphq/np/internal/app.App.GetNodeLoads", clusterID);
+}
+
+/**
+ * GetSettings 返回通用设置（归一化默认值）。
+ */
+export function GetSettings(): $CancellablePromise<any> {
+    return $Call.ByName("github.com/nphq/np/internal/app.App.GetSettings");
 }
 
 /**
@@ -155,6 +169,13 @@ export function RemoveCluster(clusterID: string): $CancellablePromise<any> {
 }
 
 /**
+ * ResetSettings 恢复出厂设置并返回。
+ */
+export function ResetSettings(): $CancellablePromise<any> {
+    return $Call.ByName("github.com/nphq/np/internal/app.App.ResetSettings");
+}
+
+/**
  * RestartAlloc 重启 alloc 的任务（taskName 空=全部）。
  */
 export function RestartAlloc(clusterID: string, allocID: string, taskName: string): $CancellablePromise<any> {
@@ -215,4 +236,11 @@ export function TestConnectionInput($in: uiapi$0.ClusterInput): $CancellableProm
  */
 export function UpdateCluster($in: uiapi$0.ClusterInput): $CancellablePromise<any> {
     return $Call.ByName("github.com/nphq/np/internal/app.App.UpdateCluster", $in);
+}
+
+/**
+ * UpdateSettings 校验并落盘通用设置，同时热更新轮询间隔。
+ */
+export function UpdateSettings($in: uiapi$0.SettingsInput): $CancellablePromise<any> {
+    return $Call.ByName("github.com/nphq/np/internal/app.App.UpdateSettings", $in);
 }

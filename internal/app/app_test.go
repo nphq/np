@@ -27,11 +27,14 @@ func newAppWithDeps(t *testing.T) (*App, *config.Store, *secure.MemoryKeyring) {
 	clusters := uiapi.NewClusterService(store, prefs, kr)
 	loads := uiapi.NewLoadsService(clusters.Pool())
 	clusters.OnActiveChanged = loads.Activate
+	settings := uiapi.NewSettingsService(prefs, clusters, loads)
 	return &App{
 		clusters: clusters,
 		jobs:     uiapi.NewJobsService(clusters.Pool()),
 		nodes:    uiapi.NewNodesService(clusters.Pool(), loads),
 		loads:    loads,
+		settings: settings,
+		prefs:    prefs,
 	}, store, kr
 }
 

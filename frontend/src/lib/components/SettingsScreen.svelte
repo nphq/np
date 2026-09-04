@@ -1,5 +1,5 @@
 <script lang="ts">
-  // SettingsScreen —— 对标 Lens Preferences：应用 / 显示 / 关于。
+  // SettingsScreen —— 对标 Lens Preferences：通用 / 集群默认值 / 显示 / 数据与安全 / 关于。
   import { onMount } from 'svelte'
   import { Browser } from '@wailsio/runtime'
   import { GetVersion } from '../../../bindings/github.com/nphq/np/internal/app/app'
@@ -7,22 +7,29 @@
   import type { Locale } from '../i18n/index.svelte'
   import { appearance } from '../stores/appearance.svelte'
   import type { FontFamily, FontSize, ThemePref } from '../stores/appearance.svelte'
+  import { settings, HEALTH_OPTIONS, METRICS_OPTIONS } from '../stores/settings.svelte'
 
   const SITE_URL = 'https://github.com/nphq/np'
   const FEEDBACK_URL = 'https://github.com/nphq/np/issues/new'
 
-  type Section = 'application' | 'display' | 'about'
+  type Section = 'general' | 'clusters' | 'display' | 'data' | 'about'
 
-  let section = $state<Section>('application')
+  let section = $state<Section>('general')
 
-  const sections: {
-    id: Section
-    labelKey: 'settings.nav.application' | 'settings.nav.display' | 'settings.nav.about'
-  }[] = [
-    { id: 'application', labelKey: 'settings.nav.application' },
+  const sections: { id: Section; labelKey: MessageKeyOfSettingsNav }[] = [
+    { id: 'general', labelKey: 'settings.nav.general' },
+    { id: 'clusters', labelKey: 'settings.nav.clusters' },
     { id: 'display', labelKey: 'settings.nav.display' },
+    { id: 'data', labelKey: 'settings.nav.data' },
     { id: 'about', labelKey: 'settings.nav.about' },
   ]
+
+  type MessageKeyOfSettingsNav =
+    | 'settings.nav.general'
+    | 'settings.nav.clusters'
+    | 'settings.nav.display'
+    | 'settings.nav.data'
+    | 'settings.nav.about'
 
   const locales: { id: Locale; label: string }[] = [
     { id: 'zh', label: '中文' },
@@ -68,6 +75,10 @@
     return active ? 'bg-zinc-100 font-medium text-zinc-900' : 'text-zinc-400 hover:bg-zinc-800'
   }
 
+  function toggleClass(on: boolean): string {
+    return on ? 'bg-emerald-600' : 'bg-zinc-700'
+  }
+
   function openExternal(url: string): void {
     void Browser.OpenURL(url).catch(() => {
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -79,11 +90,13 @@
   onMount(() => {
     GetVersion()
       .then((v) => {
-        appVersion = v
+        appVersion = v as string
       })
       .catch(() => {
         appVersion = 'unknown'
       })
+    void settings.refresh()
+    void settings.loadPaths()
   })
 </script>
 
@@ -92,7 +105,7 @@
     <div class="mb-3 px-1 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
       {t('settings.navTitle')}
     </div>
-    <nav class="flex flex-col gap-0.5">
+    <nav class="flex flex-col gap-0.5" aria-label={t('settings.navTitle')}>
       {#each sections as s (s.id)}
         <button class={navClass(s.id)} onclick={() => (section = s.id)}>
           {t(s.labelKey)}
@@ -102,25 +115,188 @@
   </aside>
 
   <div class="min-h-0 flex-1 overflow-y-auto p-6">
-    {#if section === 'application'}
-      <h1 class="text-lg font-semibold">{t('settings.application.title')}</h1>
-      <p class="mt-1 text-xs text-zinc-500">{t('settings.application.subtitle')}</p>
+    {#if section === 'general'}
+      <h1 class="text-lg font-semibold">{t('settings.general.title')}</h1>
+      <p class="mt-1 text-xs text-zinc-500">{t('settings.general.subtitle')}</p>
+      {#if settings.state.saving}
+        <p class="mt-2 text-[11px] text-zinc-600">{t('settings.general.saving')}</p>
+      {/if}
 
       <section class="mt-8 max-w-lg">
         <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-          {t('settings.application.language')}
+          {t('settings.general.language')}
         </h2>
-        <p class="mt-1 text-xs text-zinc-600">{t('settings.application.languageHint')}</p>
-        <div class="mt-3 flex overflow-hidden rounded border border-zinc-700">
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.general.languageHint')}</p>
+        <div
+          class="mt-3 flex overflow-hidden rounded border border-zinc-700"
+          role="group"
+          aria-label={t('settings.general.language')}
+        >
           {#each locales as loc (loc.id)}
             <button
               class="flex-1 px-3 py-2 text-xs {segmentClass(i18n.locale === loc.id)}"
+              aria-pressed={i18n.locale === loc.id}
               onclick={() => i18n.setLocale(loc.id)}
             >
               {loc.label}
             </button>
           {/each}
         </div>
+      </section>
+
+      <section class="mt-8 max-w-lg">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.general.confirm')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.general.confirmHint')}</p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.state.settings.confirmDestructive}
+          aria-label={t('settings.general.confirm')}
+          class="mt-3 flex w-full items-center justify-between rounded border border-zinc-700 px-3 py-2.5 text-left"
+          onclick={() =>
+            settings.set('confirmDestructive', !settings.state.settings.confirmDestructive)}
+        >
+          <span class="text-xs text-zinc-300">
+            {settings.state.settings.confirmDestructive
+              ? t('settings.general.confirmOn')
+              : t('settings.general.confirmOff')}
+          </span>
+          <span
+            class="relative inline-flex h-5 w-9 items-center rounded-full {toggleClass(
+              settings.state.settings.confirmDestructive,
+            )}"
+          >
+            <span
+              class="inline-block h-4 w-4 rounded-full bg-white transition-transform {settings.state
+                .settings.confirmDestructive
+                ? 'translate-x-4'
+                : 'translate-x-1'}"
+            ></span>
+          </span>
+        </button>
+      </section>
+
+      <section class="mt-8 max-w-lg">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.general.restore')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.general.restoreHint')}</p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.state.settings.autoRestoreActive}
+          aria-label={t('settings.general.restore')}
+          class="mt-3 flex w-full items-center justify-between rounded border border-zinc-700 px-3 py-2.5 text-left"
+          onclick={() =>
+            settings.set('autoRestoreActive', !settings.state.settings.autoRestoreActive)}
+        >
+          <span class="text-xs text-zinc-300">
+            {settings.state.settings.autoRestoreActive
+              ? t('settings.general.confirmOn')
+              : t('settings.general.confirmOff')}
+          </span>
+          <span
+            class="relative inline-flex h-5 w-9 items-center rounded-full {toggleClass(
+              settings.state.settings.autoRestoreActive,
+            )}"
+          >
+            <span
+              class="inline-block h-4 w-4 rounded-full bg-white transition-transform {settings.state
+                .settings.autoRestoreActive
+                ? 'translate-x-4'
+                : 'translate-x-1'}"
+            ></span>
+          </span>
+        </button>
+      </section>
+
+      <section class="mt-8 max-w-lg">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.general.health')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.general.healthHint')}</p>
+        <div
+          class="mt-3 flex flex-wrap gap-2"
+          role="group"
+          aria-label={t('settings.general.health')}
+        >
+          {#each HEALTH_OPTIONS as n (n)}
+            <button
+              class="rounded border px-3 py-1.5 font-mono text-xs {settings.state.settings
+                .healthIntervalSec === n
+                ? 'border-zinc-100 bg-zinc-100 font-medium text-zinc-900'
+                : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'}"
+              aria-pressed={settings.state.settings.healthIntervalSec === n}
+              onclick={() => settings.set('healthIntervalSec', n)}
+            >
+              {t('settings.general.seconds', { n })}
+            </button>
+          {/each}
+        </div>
+      </section>
+
+      <section class="mt-8 max-w-lg">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.general.metrics')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.general.metricsHint')}</p>
+        <div
+          class="mt-3 flex flex-wrap gap-2"
+          role="group"
+          aria-label={t('settings.general.metrics')}
+        >
+          {#each METRICS_OPTIONS as n (n)}
+            <button
+              class="rounded border px-3 py-1.5 font-mono text-xs {settings.state.settings
+                .metricsIntervalSec === n
+                ? 'border-zinc-100 bg-zinc-100 font-medium text-zinc-900'
+                : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'}"
+              aria-pressed={settings.state.settings.metricsIntervalSec === n}
+              onclick={() => settings.set('metricsIntervalSec', n)}
+            >
+              {t('settings.general.seconds', { n })}
+            </button>
+          {/each}
+        </div>
+      </section>
+    {:else if section === 'clusters'}
+      <h1 class="text-lg font-semibold">{t('settings.clusters.title')}</h1>
+      <p class="mt-1 text-xs text-zinc-500">{t('settings.clusters.subtitle')}</p>
+
+      <section class="mt-8 max-w-lg">
+        <label
+          class="text-xs font-semibold tracking-wide text-zinc-400 uppercase"
+          for="set-default-region"
+        >
+          {t('settings.clusters.region')}
+        </label>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.clusters.regionHint')}</p>
+        <input
+          id="set-default-region"
+          class="mt-3 w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600"
+          placeholder={t('settings.clusters.regionPh')}
+          value={settings.state.settings.defaultRegion}
+          oninput={(e) => settings.set('defaultRegion', e.currentTarget.value)}
+        />
+      </section>
+
+      <section class="mt-8 max-w-lg">
+        <label
+          class="text-xs font-semibold tracking-wide text-zinc-400 uppercase"
+          for="set-default-ns"
+        >
+          {t('settings.clusters.namespace')}
+        </label>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.clusters.namespaceHint')}</p>
+        <input
+          id="set-default-ns"
+          class="mt-3 w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600"
+          placeholder={t('settings.clusters.namespacePh')}
+          value={settings.state.settings.defaultNamespace}
+          oninput={(e) => settings.set('defaultNamespace', e.currentTarget.value)}
+        />
       </section>
     {:else if section === 'display'}
       <h1 class="text-lg font-semibold">{t('settings.display.title')}</h1>
@@ -131,10 +307,15 @@
           {t('settings.display.theme')}
         </h2>
         <p class="mt-1 text-xs text-zinc-600">{t('settings.display.themeHint')}</p>
-        <div class="mt-3 flex overflow-hidden rounded border border-zinc-700">
+        <div
+          class="mt-3 flex overflow-hidden rounded border border-zinc-700"
+          role="group"
+          aria-label={t('settings.display.theme')}
+        >
           {#each themes as th (th.id)}
             <button
               class="flex-1 px-3 py-2 text-xs {segmentClass(appearance.settings.theme === th.id)}"
+              aria-pressed={appearance.settings.theme === th.id}
               onclick={() => appearance.setTheme(th.id)}
             >
               {t(th.labelKey)}
@@ -158,12 +339,17 @@
           {t('settings.display.font')}
         </h2>
         <p class="mt-1 text-xs text-zinc-600">{t('settings.display.fontHint')}</p>
-        <div class="mt-3 flex overflow-hidden rounded border border-zinc-700">
+        <div
+          class="mt-3 flex overflow-hidden rounded border border-zinc-700"
+          role="group"
+          aria-label={t('settings.display.font')}
+        >
           {#each fonts as f (f.id)}
             <button
               class="flex-1 px-3 py-2 text-xs {segmentClass(
                 appearance.settings.fontFamily === f.id,
               )}"
+              aria-pressed={appearance.settings.fontFamily === f.id}
               onclick={() => appearance.setFontFamily(f.id)}
             >
               {t(f.labelKey)}
@@ -182,15 +368,116 @@
           {t('settings.display.size')}
         </h2>
         <p class="mt-1 text-xs text-zinc-600">{t('settings.display.sizeHint')}</p>
-        <div class="mt-3 flex overflow-hidden rounded border border-zinc-700">
+        <div
+          class="mt-3 flex overflow-hidden rounded border border-zinc-700"
+          role="group"
+          aria-label={t('settings.display.size')}
+        >
           {#each sizes as s (s.id)}
             <button
               class="flex-1 px-3 py-2 text-xs {segmentClass(appearance.settings.fontSize === s.id)}"
+              aria-pressed={appearance.settings.fontSize === s.id}
               onclick={() => appearance.setFontSize(s.id)}
             >
               {t(s.labelKey)}
             </button>
           {/each}
+        </div>
+      </section>
+    {:else if section === 'data'}
+      <h1 class="text-lg font-semibold">{t('settings.data.title')}</h1>
+      <p class="mt-1 text-xs text-zinc-500">{t('settings.data.subtitle')}</p>
+
+      <section class="mt-8 max-w-xl">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.data.paths')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.data.pathsHint')}</p>
+        <dl class="mt-3 space-y-2 text-xs">
+          {#if settings.paths.value}
+            <div
+              class="flex items-center justify-between gap-3 rounded border border-zinc-800 px-3 py-2"
+            >
+              <dt class="shrink-0 text-zinc-500">{t('settings.data.configDir')}</dt>
+              <dd
+                class="min-w-0 flex-1 truncate font-mono text-zinc-300"
+                title={settings.paths.value.configDir}
+              >
+                {settings.paths.value.configDir}
+              </dd>
+              <button
+                type="button"
+                class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
+                onclick={() => settings.copyText(settings.paths.value?.configDir ?? '')}
+              >
+                {t('settings.data.copy')}
+              </button>
+            </div>
+            <div
+              class="flex items-center justify-between gap-3 rounded border border-zinc-800 px-3 py-2"
+            >
+              <dt class="shrink-0 text-zinc-500">{t('settings.data.clustersFile')}</dt>
+              <dd
+                class="min-w-0 flex-1 truncate font-mono text-zinc-300"
+                title={settings.paths.value.clusters}
+              >
+                {settings.paths.value.clusters}
+              </dd>
+              <button
+                type="button"
+                class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
+                onclick={() => settings.copyText(settings.paths.value?.clusters ?? '')}
+              >
+                {t('settings.data.copy')}
+              </button>
+            </div>
+            <div
+              class="flex items-center justify-between gap-3 rounded border border-zinc-800 px-3 py-2"
+            >
+              <dt class="shrink-0 text-zinc-500">{t('settings.data.prefsFile')}</dt>
+              <dd
+                class="min-w-0 flex-1 truncate font-mono text-zinc-300"
+                title={settings.paths.value.preferences}
+              >
+                {settings.paths.value.preferences}
+              </dd>
+              <button
+                type="button"
+                class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
+                onclick={() => settings.copyText(settings.paths.value?.preferences ?? '')}
+              >
+                {t('settings.data.copy')}
+              </button>
+            </div>
+          {:else}
+            <p class="text-zinc-600">…</p>
+          {/if}
+        </dl>
+      </section>
+
+      <section class="mt-8 max-w-xl">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          {t('settings.data.tokenTitle')}
+        </h2>
+        <p class="mt-1 text-xs text-zinc-600">{t('settings.data.tokenHint')}</p>
+      </section>
+
+      <section class="mt-8 max-w-xl rounded border border-red-900/60 p-4">
+        <h2 class="text-xs font-semibold tracking-wide text-red-400 uppercase">
+          {t('settings.data.danger')}
+        </h2>
+        <div class="mt-3 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-sm text-zinc-200">{t('settings.data.reset')}</p>
+            <p class="mt-0.5 text-xs text-zinc-500">{t('settings.data.resetHint')}</p>
+          </div>
+          <button
+            type="button"
+            class="shrink-0 rounded border border-red-800 px-3 py-1.5 text-xs text-red-300 hover:bg-red-950"
+            onclick={() => settings.reset()}
+          >
+            {t('settings.data.resetAction')}
+          </button>
         </div>
       </section>
     {:else}

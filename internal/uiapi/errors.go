@@ -3,6 +3,7 @@ package uiapi
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/nphq/np/internal/config"
 	"github.com/nphq/np/internal/secure"
@@ -53,7 +54,30 @@ func Wrap(err error) *Error {
 	case errors.Is(err, secure.ErrTokenNotFound):
 		return &Error{Code: CodeNotFound, Message: "token not found in keychain"}
 	default:
-		return &Error{Code: CodeInternal, Message: err.Error()}
+		return mapNomadError(err)
+	}
+}
+
+// mapNomadError 把 Nomad HTTP/API 错误映射到前端可区分的码：
+// 404/“not found” → not_found；401/403/ACL 拒绝 → invalid_input（需换 token/提权）；
+// 其余 → internal。避免前端把“无权限”“不存在”“服务端挂了”混为一谈。
+func mapNomadError(err error) *Error {
+	msg := err.Error()
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(msg, "404"),
+		strings.Contains(lower, "not found"),
+		strings.Contains(lower, "no such"):
+		return &Error{Code: CodeNotFound, Message: msg}
+	case strings.Contains(msg, "401"),
+		strings.Contains(msg, "403"),
+		strings.Contains(lower, "permission denied"),
+		strings.Contains(lower, "acl"),
+		strings.Contains(lower, "forbidden"),
+		strings.Contains(lower, "unauthorized"):
+		return &Error{Code: CodeInvalidInput, Message: "forbidden (check token/ACL): " + msg}
+	default:
+		return &Error{Code: CodeInternal, Message: msg}
 	}
 }
 

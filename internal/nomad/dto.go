@@ -149,9 +149,10 @@ type AllocSummary struct {
 }
 
 // NodeSummary 是节点列表行。
-// CPU/CPUTotal 单位为 MHz，Memory/MemoryTotal 单位为 MB，Disk/DiskTotal 为 MB。
-// 静态容量来自 NodeResources（ListNodes 时返回）；used/allocated 由负载
-// Collector 写入（uiapi/nodes.go 从 metrics cache 派生，ADR-11 单一数据源）。
+// 已用：CPU/Memory/Disk（used，由 metrics cache 派生）；
+// 容量：CPUTotal/MemoryTotal/DiskTotal（静态，ListNodes 时返回）。
+// 单位：CPU/CPUTotal 为 MHz，Memory/MemoryTotal 为 MB，Disk/DiskTotal 为 MB。
+// 前端请用 CPU/CPUTotal 配对展示，不要把 CPU 当容量读。
 type NodeSummary struct {
 	ID                    string  `json:"id"`
 	Name                  string  `json:"name"`

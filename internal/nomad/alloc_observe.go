@@ -145,13 +145,7 @@ func ListAllocTaskEvents(ctx context.Context, client *api.Client, allocID string
 		}
 	}
 	// 按时间升序
-	for i := 0; i < len(out); i++ {
-		for j := i + 1; j < len(out); j++ {
-			if out[j].Time < out[i].Time {
-				out[i], out[j] = out[j], out[i]
-			}
-		}
-	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time < out[j].Time })
 	return out, nil
 }
 
@@ -221,7 +215,9 @@ func GetAllocLogs(ctx context.Context, client *api.Client, opts AllocLogsOpts) (
 
 	frames, errs := client.AllocFS().Logs(alloc, false, task, logType, "end", int64(maxBytes), cancel, (&api.QueryOptions{}).WithContext(ctx))
 
-	res, err := readLogs(logsSource{frames: frames, errs: errs}, maxBytes, time.After(timeout), stop)
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	res, err := readLogs(logsSource{frames: frames, errs: errs}, maxBytes, timer.C, stop)
 	if err != nil {
 		return nil, fmt.Errorf("alloc logs %s/%s: %w", allocID, task, err)
 	}

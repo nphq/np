@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -34,6 +35,7 @@ func main() {
 	})
 
 	if err := wailsApp.Run(); err != nil {
-		log.Fatal(err)
+		log.Printf("wails run: %v", err)
+		os.Exit(1)
 	}
 }

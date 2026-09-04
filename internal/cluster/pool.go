@@ -44,20 +44,47 @@ func DefaultClientFactory(cfg *config.ClusterConfig, token string) (*api.Client,
 
 // buildHTTPClient 构造统一的 raw HTTP client（10s 超时；自签证书时跳过校验）。
 // 与 DefaultClientFactory 共享，避免 SDK 客户端与 Probe 路径行为不一致。
+// 底层 Transport 按 (insecure) 缓存复用，保留 keep-alive 与代理设置。
 func buildHTTPClient(cfg *config.ClusterConfig) *http.Client {
 	return NewProbeTarget(cfg.Address, "", cfg.TLS, cfg.InsecureSkipVerify).HTTPClient
+}
+
+var (
+	probeHTTPMu      sync.Mutex
+	probeHTTPClients = map[bool]*http.Client{}
+)
+
+// sharedProbeHTTP 返回缓存的 probe client：clone DefaultTransport 只改 TLS，
+// 保留 Proxy/keep-alive；超时 10s。
+func sharedProbeHTTP(insecureSkipVerify bool) *http.Client {
+	probeHTTPMu.Lock()
+	defer probeHTTPMu.Unlock()
+	if hc, ok := probeHTTPClients[insecureSkipVerify]; ok {
+		return hc
+	}
+	var tr *http.Transport
+	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
+		tr = dt.Clone()
+	} else {
+		tr = &http.Transport{}
+	}
+	if insecureSkipVerify {
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // 用户显式开启
+	}
+	hc := &http.Client{Timeout: 10 * time.Second, Transport: tr}
+	probeHTTPClients[insecureSkipVerify] = hc
+	return hc
 }
 
 // NewProbeTarget 由 addr/token/useTLS/insecure 直接构造 ProbeTarget，不走 Pool/Store。
 // 用于"添加集群前测连接"等尚未落盘的场景，与已落盘集群走同一份 TLS/超时配置。
 func NewProbeTarget(addr, token string, useTLS, insecureSkipVerify bool) ProbeTarget {
-	hc := &http.Client{Timeout: 10 * time.Second}
-	if useTLS && insecureSkipVerify {
-		hc.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // 用户显式开启
-		}
-	}
-	return ProbeTarget{Addr: addr, Token: token, HTTPClient: hc}
+	// insecure 仅对 https 有意义；http 下复用普通 client 即可。
+	insecure := useTLS && insecureSkipVerify
+	// 地址显式 https 但 useTLS=false（如旧配置）时，insecure 不生效是预期：
+	// 默认 Transport 仍做正常 TLS 校验，避免静默跳过。
+	_ = useTLS
+	return ProbeTarget{Addr: addr, Token: token, HTTPClient: sharedProbeHTTP(insecure)}
 }
 
 // Pool 管理每集群一个 *api.Client，按 clusterID 路由。
@@ -125,14 +152,18 @@ func (p *Pool) build(clusterID string) (*api.Client, error) {
 }
 
 // Close 释放全部客户端（应用退出时调用）。
-// 注意：*api.Client 没有公开的 Close，这里只清缓存；底层 HTTP transport
-// 由 SDK 共享，进程退出时回收。
+// *api.Client 无公开 Close，这里清缓存并关闭共享 probe Transport 的空闲连接。
 func (p *Pool) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for id := range p.clients {
 		delete(p.clients, id)
 	}
+	probeHTTPMu.Lock()
+	for _, hc := range probeHTTPClients {
+		hc.CloseIdleConnections()
+	}
+	probeHTTPMu.Unlock()
 }
 
 // Namespace 返回集群配置的默认 namespace（空 = 不设置，服务端回退 default）。
@@ -170,9 +201,9 @@ func (p *Pool) Invalidate(clusterID string) {
 	delete(p.clients, clusterID)
 }
 
-// ProbeTarget 返回某集群的 raw HTTP 材料（addr + token + httpClient），
+// ProbeTarget 返回某集群的 raw HTTP 材料（addr + token + 共享 httpClient），
 // 供 Probe 走 ctx-aware 的直连 HTTP，绕开 SDK Status().Leader() 不收 ctx
-// 的限制。读取配置/token 与 Get 同源，但每次重建 http.Client（调用频率低）。
+// 的限制。读取配置/token 与 Get 同源；httpClient 为共享缓存（keep-alive）。
 func (p *Pool) ProbeTarget(clusterID string) (ProbeTarget, error) {
 	cfg, err := p.cfg.Get(clusterID)
 	if err != nil {

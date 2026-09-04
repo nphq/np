@@ -6,6 +6,8 @@
   import { createNodesStore } from './lib/stores/nodes.svelte'
   import { createJobsStore } from './lib/stores/jobs.svelte'
   import { createAllocsStore } from './lib/stores/allocs.svelte'
+  import { settings } from './lib/stores/settings.svelte'
+  import { newClusterInput } from './lib/stores/clusters.svelte'
   import { i18n, t } from './lib/i18n/index.svelte'
   import AddClusterDialog from './lib/components/AddClusterDialog.svelte'
   import ConfirmDialog from './lib/components/ConfirmDialog.svelte'
@@ -49,6 +51,7 @@
   onMount(() => {
     void clusters.refresh()
     void clusters.discover()
+    void settings.refresh()
   })
 
   // 集群切换 / 同 ID 再激活（ImportFromEnv）：清空旧数据并首拉负载/节点/job。
@@ -153,6 +156,23 @@
     await clusters.removeCluster(id)
   }
 
+  // 删除集群入口：尊重“危险操作二次确认”设置；关闭时直接执行。
+  function requestRemove(id: string): void {
+    if (!settings.state.settings.confirmDestructive) {
+      void handleRemove(id)
+      return
+    }
+    confirmRemove = id
+  }
+
+  // 新建表单预填设置页的 region/namespace 默认值（已有集群不受影响）。
+  const addInitial = $derived(
+    newClusterInput({
+      region: settings.state.settings.defaultRegion,
+      namespace: settings.state.settings.defaultNamespace,
+    }),
+  )
+
   // 一键导入（M2.2）：服务端读 NOMAD_*，token 不经前端往返。
   async function handleImportFromEnv(): Promise<void> {
     const res = await clusters.importFromEnv(t('discover.importName'))
@@ -221,18 +241,29 @@
         {:else}
           {#each clusters.state.clusters as item (item.info.id)}
             {@const c = item.info}
-            <button
+            <div
+              role="button"
+              tabindex="0"
+              aria-current={c.id === clusters.state.activeID ? 'true' : undefined}
+              aria-label={c.name || c.id}
               class="group mb-1 flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-800 {c.id ===
               clusters.state.activeID
                 ? 'bg-zinc-800 text-zinc-100'
                 : 'text-zinc-300'}"
               onclick={() => void clusters.setActive(c.id)}
               onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') void clusters.setActive(c.id)
+                if (e.currentTarget === e.target && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault()
+                  void clusters.setActive(c.id)
+                }
               }}
             >
               <span class="flex min-w-0 items-center gap-2">
-                <span class={`h-2 w-2 shrink-0 rounded-full ${healthDot(c.health)}`}></span>
+                <span
+                  class={`h-2 w-2 shrink-0 rounded-full ${healthDot(c.health)}`}
+                  role="img"
+                  aria-label={`health: ${c.health}`}
+                ></span>
                 <span class="truncate">{c.name || c.id}</span>
                 {#if c.hasLegacyToken}
                   <span
@@ -242,11 +273,11 @@
                   >
                 {/if}
               </span>
-              <span class="flex shrink-0 items-center">
-                <span
-                  role="button"
-                  tabindex="0"
-                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline {c.pinned
+              <span class="flex shrink-0 items-center group-focus-within:inline">
+                <button
+                  type="button"
+                  aria-label={t(c.pinned ? 'cluster.unpin' : 'cluster.pin')}
+                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline group-focus-within:inline [@media(hover:none)]:inline {c.pinned
                     ? 'text-amber-400'
                     : ''}"
                   title={t(c.pinned ? 'cluster.unpin' : 'cluster.pin')}
@@ -254,73 +285,45 @@
                     e.stopPropagation()
                     e.preventDefault()
                     void clusters.pinCluster(c.id, !c.pinned)
-                  }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      void clusters.pinCluster(c.id, !c.pinned)
-                    }
-                  }}>{c.pinned ? '★' : '☆'}</span
+                  }}>{c.pinned ? '★' : '☆'}</button
                 >
-                <span
-                  role="button"
-                  tabindex="0"
-                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline"
+                <button
+                  type="button"
+                  aria-label={t('cluster.test')}
+                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline group-focus-within:inline [@media(hover:none)]:inline"
                   title={t('cluster.test')}
                   onclick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
                     void clusters.testConnection(c.id)
-                  }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      void clusters.testConnection(c.id)
-                    }
-                  }}>⟳</span
+                  }}>⟳</button
                 >
-                <span
-                  role="button"
-                  tabindex="0"
-                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline"
+                <button
+                  type="button"
+                  aria-label={t('cluster.edit')}
+                  class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline group-focus-within:inline [@media(hover:none)]:inline"
                   title={t('cluster.edit')}
                   onclick={(e) => {
                     e.stopPropagation()
                     e.preventDefault()
                     openEdit(c.id)
-                  }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      openEdit(c.id)
-                    }
-                  }}>✎</span
+                  }}>✎</button
                 >
                 {#if c.id === clusters.state.activeID}
-                  <span
-                    role="button"
-                    tabindex="0"
-                    class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline"
+                  <button
+                    type="button"
+                    aria-label={t('app.removeTitle')}
+                    class="hidden rounded px-1 text-[11px] text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 group-hover:inline group-focus-within:inline [@media(hover:none)]:inline"
                     title={t('app.removeTitle')}
                     onclick={(e) => {
                       e.stopPropagation()
                       e.preventDefault()
-                      confirmRemove = c.id
-                    }}
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        confirmRemove = c.id
-                      }
-                    }}>✕</span
+                      requestRemove(c.id)
+                    }}>✕</button
                   >
                 {/if}
               </span>
-            </button>
+            </div>
             {#if c.pinned && clusters.state.clusters[clusters.state.clusters.indexOf(item) + 1]?.info.pinned === false}
               <div class="my-1 border-t border-zinc-800"></div>
             {/if}
@@ -537,7 +540,11 @@
   </footer>
 
   <!-- Toasts -->
-  <div class="pointer-events-none fixed top-12 right-4 z-[60] flex w-80 flex-col gap-2">
+  <div
+    class="pointer-events-none fixed top-12 right-4 z-[60] flex w-80 flex-col gap-2"
+    role="status"
+    aria-live="polite"
+  >
     {#each toasts as toast (toast.id)}
       <div
         class="pointer-events-auto rounded border px-3 py-2 text-xs shadow-lg
@@ -569,6 +576,7 @@
   {#if showAddDialog}
     <AddClusterDialog
       mode="add"
+      initial={addInitial}
       discovered={clusters.state.discovered ?? []}
       onSubmit={onAdd}
       onClose={() => (showAddDialog = false)}

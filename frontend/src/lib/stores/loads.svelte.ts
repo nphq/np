@@ -47,7 +47,8 @@ export function createLoadsStore() {
   let currentClusterID: string | null = null
 
   // 订阅后端 load.patch；payload 是 LoadPatch（无 Envelope 包装）。
-  Events.On('load.patch', (ev) => {
+  // On 返回取消函数，dispose 时 Off 避免 HMR/重挂重复订阅。
+  const offPatch = Events.On('load.patch', (ev) => {
     const p = ev.data as LoadPatch | null
     if (!p) return
     // 激活集群切换后，旧集群的最后一个 patch 可能晚于新集群首拉到达：
@@ -126,5 +127,6 @@ export function createLoadsStore() {
     },
     refresh,
     clear,
+    dispose: () => offPatch(),
   }
 }

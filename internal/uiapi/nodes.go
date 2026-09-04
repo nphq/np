@@ -34,7 +34,9 @@ func (s *NodesService) ListNodes(ctx context.Context, clusterID string) ([]nomad
 		return nil, Wrap(err)
 	}
 
-	// 用负载缓存补 used/allocated（缓存为空时保持 0，前端显示 loading）
+	// 用负载缓存补 used（缓存为空时保持 0，前端显示 loading）。
+	// 容量 Totals 以 ListNodes 静态值为准，不用 cache 覆盖，避免口径漂移；
+	// NodeSummary.CPU/Memory/Disk = 已用（used），CPUTotal 等 = 容量。
 	byID := make(map[string]nomad.NodeLoad, len(nodes))
 	for _, nl := range s.loads.NodeLoads(ctx, clusterID) {
 		byID[nl.NodeID] = nl
@@ -42,11 +44,8 @@ func (s *NodesService) ListNodes(ctx context.Context, clusterID string) ([]nomad
 	for i := range nodes {
 		if nl, ok := byID[nodes[i].ID]; ok {
 			nodes[i].CPU = nl.Used.CPU
-			nodes[i].CPUTotal = nl.Capacity.CPU
 			nodes[i].Memory = nl.Used.Memory
-			nodes[i].MemoryTotal = nl.Capacity.Memory
 			nodes[i].Disk = nl.Used.Disk
-			nodes[i].DiskTotal = nl.Capacity.Disk
 			nodes[i].RunningAllocs = nl.RunningAllocs
 		}
 	}

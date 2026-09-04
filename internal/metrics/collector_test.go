@@ -266,7 +266,7 @@ func TestCollectorStartStop(t *testing.T) {
 	cfg.Interval = 1
 	coll, _, last := testCollector(t, m, cfg)
 
-	coll.Start()
+	coll.Start(context.Background())
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		p := last()

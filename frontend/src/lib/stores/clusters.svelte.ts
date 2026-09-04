@@ -26,6 +26,23 @@ export class ClusterInput {
   useEnvToken: boolean = false
 }
 
+// newClusterInput 返回纯对象入参，避免 class 原型跨 IPC 序列化歧义。
+// 新代码请用此工厂；ClusterInput class 仅为存量 `new ClusterInput()` 兼容保留。
+export function newClusterInput(init: Partial<ClusterInput> = {}): ClusterInput {
+  return {
+    id: '',
+    name: '',
+    address: '',
+    region: '',
+    namespace: '',
+    tls: false,
+    insecureSkipVerify: false,
+    token: '',
+    useEnvToken: false,
+    ...init,
+  }
+}
+
 export interface ClusterListItem {
   info: nomad.ClusterInfo
   // 探测后补充
@@ -74,7 +91,8 @@ export function createClustersStore() {
   const pendingHealth = new Map<string, ClusterHealthPayload>()
 
   // 订阅后端 cluster.health 事件；payload 自带 clusterID。
-  Events.On('cluster.health', (ev) => {
+  // On 返回取消函数，dispose 时释放，避免 HMR/重挂重复订阅。
+  const offHealth = Events.On('cluster.health', (ev) => {
     const p = ev.data as ClusterHealthPayload | null
     if (!p || !p.clusterID) return
     applyHealth(p)
@@ -325,11 +343,18 @@ export function createClustersStore() {
     setActive,
     pinCluster,
     testConnection,
+    dispose: () => offHealth(),
   }
 }
 
 export function isErr<T>(res: T | uiapi.Error): res is uiapi.Error {
-  return !!(res && typeof res === 'object' && 'code' in res && 'message' in res)
+  return !!(
+    res &&
+    typeof res === 'object' &&
+    'code' in res &&
+    'message' in res &&
+    typeof (res as unknown as Record<string, unknown>).code === 'string'
+  )
 }
 
 // --- toast 极简实现（M3 再扩展命令面板/通知中心） ---
