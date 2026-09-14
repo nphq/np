@@ -118,7 +118,7 @@ jobs:
             libwayland-dev
 
       - name: Pull Nomad image (warm cache)
-        run: docker pull hashicorp/nomad:2.0.5
+        run: docker pull hashicorp/nomad:2.0.6
 
       - name: go vet e2e
         run: go vet -tags=e2e ./internal/e2e/...

@@ -3,8 +3,8 @@ module github.com/nphq/np
 go 1.26.0
 
 require (
-	github.com/hashicorp/nomad/api v0.0.0-20260812182241-5c8612bba6eb
-	github.com/wailsapp/wails/v3 v3.0.0-beta.18
+	github.com/hashicorp/nomad/api v0.0.0-20260909213452-ae756757bf7e
+	github.com/wailsapp/wails/v3 v3.0.0-beta.21
 	github.com/zalando/go-keyring v0.2.8
 )
 
@@ -17,11 +17,8 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/cronexpr v1.1.3 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
-	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect

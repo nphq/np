@@ -17,7 +17,7 @@
         "@tsconfig/svelte": "^5.0.4",
         "@types/node": "^26.1.2",
         "@typescript/native": "npm:typescript@^7.0.2",
-        "@wailsio/runtime": "^3.0.0-beta.18",
+        "@wailsio/runtime": "^3.0.0-beta.21",
         "eslint": "^10.8.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-svelte": "^3.22.0",
@@ -332,7 +332,7 @@
 
     "@vitest/utils": ["@vitest/utils@3.2.7", "", { "dependencies": { "@vitest/pretty-format": "3.2.7", "loupe": "^3.1.4", "tinyrainbow": "^2.0.0" } }, "sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw=="],
 
-    "@wailsio/runtime": ["@wailsio/runtime@3.0.0-beta.18", "", {}, "sha512-mABrIX7npcy6ROXTuyRJdQflqhqeHXBjNKdbYCBKl/d6GJoGVEWeo+LV/LkZpX/FwI+H+0XgJUyMHmJW4R8dDw=="],
+    "@wailsio/runtime": ["@wailsio/runtime@3.0.0-beta.21", "", {}, "sha512-5khssqPE98JDCHL82XpVnqOHT5ar9HT1NEJqMyTknNML066lhDc1Zd4sVkR+wx0vO80zlG2svGfzals5a0QsZA=="],
 
     "acorn": ["acorn@8.18.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ=="],
 

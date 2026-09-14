@@ -6,7 +6,7 @@
 # host Docker socket, so container jobs (e.g. nginx) can be scheduled locally.
 services:
   nomad:
-    image: hashicorp/nomad:2.0.5
+    image: hashicorp/nomad:2.0.6
     command: ["agent", "-dev", "-config", "/etc/nomad.d/nomad-dev.hcl", "-bind", "0.0.0.0"]
     ports:
       - "4646:4646"
